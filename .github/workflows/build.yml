@@ -1,0 +1,71 @@
+#
+#  Copyright (C) 2023 The connman Authors
+#  All rights reserved.
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+
+##
+#  @file
+#    This file is the GitHub Actions hosted, distributed continuous
+#    integration configuration file for connman.
+#
+
+name: "Build"
+
+on: [push, pull_request]
+
+jobs:
+
+  gcc:
+    name: "GCC ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        configuration:
+	  - { name: "Debug",   options: "--enable-debug --disable-optimization" }
+	  - { name: "Release", options: "--disable-debug" }
+	firewall:
+	  - { name: "IP Tables", type: "iptables", packages: "libxtables-dev" }
+	  - { name: "NF Tables", type: "nftables", packages: "libmnl-dev libnftables-dev" }
+    steps:
+
+    - name: "Install Job Package Dependencies"
+      run: |
+        sudo apt-get update
+        sudo apt-get --no-install-recommends install -y gcc
+
+    - name: "Install connman Package Dependencies"
+      run: |
+        sudo apt-get -y install autoconf automake libtool libdbus-1-dev libglib2.0-dev libgnutls28-dev libreadline-dev ppp-dev ${{matrix.firewall['packages']}}
+
+    - name: "Checkout"
+      uses: actions/checkout@v3.5.3
+
+    - name: "Bootstrap and Configure"
+      run: |
+        ./bootstrap-configure -C ${{matrix.configuration['options']}} --with-firewall=${{matrix.firewall['type']}}
+
+    - name: "Build"
+      run: |
+        make -j
+
+    - name: "Test"
+      run: |
+        make -j check
+
+    - name: "Distribution"
+      run: |
+        make -j dist
