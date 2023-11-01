@@ -31,10 +31,11 @@ on: [push, pull_request]
 jobs:
 
   clang:
-    name: "clang/LLVM ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
+    name: "clang/LLVM-${{matrix.clang_version}} ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
     runs-on: ubuntu-20.04
     strategy:
       matrix:
+        clang_version: [ "9", "10", "11", "12" ]
         configuration:
           - { name: "Debug",   options: "--enable-debug --disable-optimization" }
           - { name: "Release", options: "--disable-debug" }
@@ -42,13 +43,15 @@ jobs:
           - { name: "IP Tables", type: "iptables", packages: "libxtables-dev" }
           - { name: "NF Tables", type: "nftables", packages: "libnftables-dev libnftnl-dev" }
     env:
-      CC: clang
+      CC: clang-${{matrix.clang_version}}
     steps:
 
       - name: "Install Job Package Dependencies"
         run: |
+          # Focal (20.04) provides clang-9 through clang-12 from
+          # Canonical.
           sudo apt-get update
-          sudo apt-get --no-install-recommends install -y clang
+          sudo apt-get --no-install-recommends install -y clang-${{matrix.clang_version}}
 
       - name: "Install connman Package Dependencies"
         run: |
