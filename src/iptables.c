@@ -802,10 +802,10 @@ static void update_targets_reference(struct connman_iptables *table,
 			continue;
 
 		if (is_removing) {
-			if (t->verdict >= entry_before->offset)
+			if (t->verdict >= (int)entry_before->offset)
 				t->verdict -= offset;
 		} else {
-			if (t->verdict > entry_before->offset)
+			if (t->verdict > (int)entry_before->offset)
 				t->verdict += offset;
 		}
 	}
