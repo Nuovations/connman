@@ -157,6 +157,9 @@ static struct connman_ipconfig *create_ip6config(struct connman_service *service
 static void dns_changed(struct connman_service *service);
 static void vpn_auto_connect(void);
 static void trigger_autoconnect(struct connman_service *service);
+static void complete_online_check(struct connman_service *service,
+					enum connman_ipconfig_type type,
+					bool success);
 
 struct find_data {
 	const char *path;
@@ -3640,7 +3643,7 @@ void __connman_service_wispr_start(struct connman_service *service,
 		service->online_check_interval_ipv6 =
 					online_check_initial_interval;
 
-	__connman_wispr_start(service, type);
+	__connman_wispr_start(service, type, complete_online_check);
 }
 
 static DBusMessage *set_property(DBusConnection *conn,
@@ -6370,7 +6373,7 @@ static void redo_wispr(struct connman_service *service,
 		__connman_ipconfig_type2string(type),
 		service, service->name);
 
-	__connman_wispr_start(service, type);
+	__connman_wispr_start(service, type, complete_online_check);
 	connman_service_unref(service);
 }
 
@@ -6396,7 +6399,7 @@ static gboolean redo_wispr_ipv6(gpointer user_data)
 	return FALSE;
 }
 
-void __connman_service_online_check(struct connman_service *service,
+static void complete_online_check(struct connman_service *service,
 					enum connman_ipconfig_type type,
 					bool success)
 {
