@@ -37,7 +37,7 @@
 
 /**
  *  A strong (that is, uses #connman_service_{ref,unref}) reference to
- *  the network service currently used for time of day sychronization.
+ *  the network service currently used for time of day synchronization.
  *
  */
 static struct connman_service *ts_service;
@@ -451,42 +451,42 @@ static void ts_reset(struct connman_service *service)
 
 	ts_recheck_enable();
 
-    if (ts_service) {
-        connman_service_unref(ts_service);
-        ts_service = NULL;
-    }
+	if (ts_service) {
+		connman_service_unref(ts_service);
+		ts_service = NULL;
+	}
 
-    if (service) {
-	    connman_service_ref(service);
-	    ts_service = service;
-    }
+	if (service) {
+		connman_service_ref(service);
+		ts_service = service;
+	}
 
 	timeserver_sync_start();
 }
 
-static const char * timeserver_sync_reason2string(
+static const char *timeserver_sync_reason2string(
 			enum connman_timeserver_sync_reason reason)
 {
 	switch (reason) {
 	case CONNMAN_TIMESERVER_SYNC_REASON_START:
-        return "start";
+		return "start";
 	case CONNMAN_TIMESERVER_SYNC_REASON_ADDRESS_UPDATE:
-        return "address update";
+		return "address update";
 	case CONNMAN_TIMESERVER_SYNC_REASON_STATE_UPDATE:
-        return "state update";
+		return "state update";
 	case CONNMAN_TIMESERVER_SYNC_REASON_TS_CHANGE:
-        return "timeserver change";
+		return "timeserver change";
 	}
 
-    return "unknown";
+	return "unknown";
 }
 
 /**
  *  @brief
- *    Initiate a time of day sychronization with time services.
+ *    Initiate a time of day synchronization with time services.
  *
- *  This initiates a time of day sychronization with time services for
- *  the specified network service for the provided reason.
+ *  This initiates a time of day synchronization with time services
+ *  for the specified network service for the provided reason.
  *
  *  @param[in,out]  service  A pointer to the mutable network service
  *                           object for which a time of day
