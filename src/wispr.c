@@ -1011,8 +1011,8 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context)
 	 * a WISPr request "falling down a hole" that will only ever
 	 * result in a failure completion.
 	 */
-	if ((proxy_method != CONNMAN_SERVICE_PROXY_METHOD_DIRECT) &&
-		(proxy_method != CONNMAN_SERVICE_PROXY_METHOD_UNKNOWN)) {
+	if (proxy_method != CONNMAN_SERVICE_PROXY_METHOD_DIRECT &&
+			proxy_method != CONNMAN_SERVICE_PROXY_METHOD_UNKNOWN) {
 		wp_context->token = connman_proxy_lookup(interface,
 						wp_context->status_url,
 						wp_context->service,

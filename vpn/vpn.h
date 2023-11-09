@@ -73,7 +73,6 @@ void __vpn_ipconfig_cleanup(void);
 #include "vpn-provider.h"
 
 char *__vpn_provider_create_identifier(const char *host, const char *domain);
-bool __vpn_provider_check_routes(struct vpn_provider *provider);
 int __vpn_provider_append_user_route(struct vpn_provider *provider,
 				int family, const char *network,
 				const char *netmask, const char *gateway);
@@ -104,9 +103,6 @@ int __vpn_rtnl_init(void);
 void __vpn_rtnl_start(void);
 void __vpn_rtnl_cleanup(void);
 
-unsigned int __vpn_rtnl_update_interval_add(unsigned int interval);
-unsigned int __vpn_rtnl_update_interval_remove(unsigned int interval);
-int __vpn_rtnl_request_update(void);
 int __vpn_rtnl_send(const void *buf, size_t len);
 
 int __vpn_config_init(void);
