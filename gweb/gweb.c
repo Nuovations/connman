@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -635,7 +634,7 @@ void g_web_set_connect_timeout(GWeb *web, guint timeout_ms)
 	if (!web)
 		return;
 
-	if (status != 0)
+	debug(web, "timeout %u ms", timeout_ms);
 
 	web->connect_timeout_ms = timeout_ms;
 }
@@ -1273,12 +1272,13 @@ static inline int bind_socket(int sk, int index, int family)
  *                    bound to the specified session network
  *                    interface, or the socket could not connect to
  *                    the specified session peer address.
- *  @retval  -ENOMEM  If a GLib transport channle could not be created.
+ *  @retval  -ENOMEM  If a GLib transport channel could not be created.
  *
  *  @sa close_session_transport
  *
  */
-static int connect_session_transport(struct web_session *session, guint connect_timeout_ms)
+static int connect_session_transport(struct web_session *session,
+			guint connect_timeout_ms)
 {
 	GIOFlags flags;
 	int sk;
@@ -1386,10 +1386,7 @@ static int create_transport(struct web_session *session)
  *  @retval  0        If successful.
  *  @retavl  -EINVAL  If @a url was null, @a url_length was zero, or @a
  *                    cursor was null.
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    scheme.
  *
- *  @sa parse_url_scheme
  *  @sa parse_url_components
  *
  */
@@ -1462,14 +1459,6 @@ static int parse_url_scheme(const char *url, size_t url_length,
  *                                  first byte past the parsed host.
  *  @param[in,out]  host            An optional pointer to storage to
  *                                  assign a copy of the parsed host
- *                                  on success.
- *  @param[in,out]  port            An optional pointer to storage to
- *                                  assign the parsed port on
- *                                  success. On failure or absence of
- *                                  a port to parsed, this is assigned
- *                                  -1.
- *  @param[in,out]  path            An optional pointer to storage to
- *                                  assign a copy of the parsed path
  *                                  on success.
  *
  *  @retval  0        If successful.
