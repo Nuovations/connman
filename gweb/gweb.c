@@ -328,6 +328,8 @@ static void free_session(struct web_session *session)
 	if (!session)
 		return;
 
+	debug(session->web, "session %p", session);
+
 	g_free(session->request);
 
 	web = session->web;
@@ -368,6 +370,8 @@ static void free_session(struct web_session *session)
 static void flush_sessions(GWeb *web)
 {
 	GList *list;
+
+	debug(web, "flushing sessions...");
 
 	for (list = g_list_first(web->session_list);
 					list; list = g_list_next(list))
@@ -423,16 +427,9 @@ GWeb *g_web_ref(GWeb *web)
 	return web;
 }
 
-void g_web_unref(GWeb *web)
+static void g_web_free(GWeb *web)
 {
-	if (!web)
-		return;
-
-	debug(web, "ref %d",
-		web->ref_count - 1);
-
-	if (__sync_fetch_and_sub(&web->ref_count, 1) != 1)
-		return;
+	debug(web, "freeing...");
 
 	flush_sessions(web);
 
@@ -446,6 +443,20 @@ void g_web_unref(GWeb *web)
 	g_free(web->http_version);
 
 	g_free(web);
+}
+
+void g_web_unref(GWeb *web)
+{
+	if (!web)
+		return;
+
+	debug(web, "ref %d",
+		web->ref_count - 1);
+
+	if (__sync_fetch_and_sub(&web->ref_count, 1) != 1)
+		return;
+
+	g_web_free(web);
 }
 
 bool g_web_supports_tls(void)
