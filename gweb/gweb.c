@@ -1375,94 +1375,6 @@ static int create_transport(struct web_session *session)
 
 /**
  *  @brief
- *    Attempt to parse the scheme component from a URL with an
- *    optional default fallback.
- *
- *  This attempts to parse the scheme component from the specified URL
- *  of the provided length at the specified cursor point in the
- *  URL. If a scheme cannot be parsed, the provided optional default
- *  fallback is used. If provided, the parsed scheme is copied and
- *  assigned to @a scheme.
- *
- *  @note
- *    The caller is responsible for deallocating the memory assigned
- *    to @a *scheme, if provided, on success.
- *
- *  @param[in]      url             A pointer to the immutable null-
- *                                  terminated C string from which to
- *                                  parse the scheme component.
- *  @param[in]      url_length      The length, in bytes, of @a url.
- *  @param[in,out]  cursor          A pointer to the current parsing
- *                                  position within @a url at which to
- *                                  start parsing the scheme. On
- *                                  success, this is updated to the
- *                                  first byte past the parsed scheme.
- *  @param[in,out]  scheme          An optional pointer to storage to
- *                                  assign a copy of the parsed scheme
- *                                  on success.
- *  @param[in]      default_scheme  An optional pointer to the immutable
- *                                  null-terminated C string to use of
- *                                  a scheme cannot be parsed from @a
- *                                  url at @a cursor.
- *
- *  @retval  0        If successful.
- *  @retavl  -EINVAL  If @a url was null, @a url_length was zero, or @a
- *                    cursor was null.
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    scheme.
- *
- *  @sa parse_url_scheme
- *  @sa parse_url_components
- *
- */
-static int parse_url_scheme_with_default(const char *url, size_t url_length,
-						const char **cursor,
-						char **scheme,
-						const char *default_scheme)
-{
-	static const char * const scheme_delimiter = "://";
-	static const size_t scheme_delimiter_length = 3;
-	const char *result;
-	size_t remaining_length;
-	size_t scheme_length = 0;
-
-	if (!url || !url_length || !cursor)
-		return -EINVAL;
-
-	remaining_length = (url_length - (size_t)(*cursor - url));
-	if (remaining_length) {
-		result = (const char *)memmem(*cursor,
-							remaining_length,
-							scheme_delimiter,
-							scheme_delimiter_length);
-		if (result) {
-			scheme_length = (size_t)(result - *cursor);
-
-			if (scheme) {
-				*scheme = g_strndup(*cursor, scheme_length);
-				if (!*scheme)
-					return -ENOMEM;
-			}
-
-			*cursor += scheme_length + scheme_delimiter_length;
-		} else if (scheme && default_scheme) {
-			scheme_length = strlen(default_scheme);
-
-			*cursor += scheme_length;
-
-			*scheme = g_strndup(default_scheme, scheme_length);
-			if (!*scheme)
-				return -ENOMEM;
-		} else if (scheme)
-			*scheme = NULL;
-	} else if (scheme)
-		*scheme = NULL;
-
-	return 0;
-}
-
-/**
- *  @brief
  *    Attempt to parse the scheme component from a URL.
  *
  *  This attempts to parse the scheme component from the specified URL
@@ -1474,9 +1386,10 @@ static int parse_url_scheme_with_default(const char *url, size_t url_length,
  *    The caller is responsible for deallocating the memory assigned
  *    to @a *scheme, if provided, on success.
  *
- *  @param[in]      url             A pointer to the immutable null-
- *                                  terminated C string from which to
- *                                  parse the scheme component.
+ *  @param[in]      url             A pointer to the immutable string,
+ *                                  of length @a url_length, from
+ *                                  which to parse the scheme
+ *                                  component.
  *  @param[in]      url_length      The length, in bytes, of @a url.
  *  @param[in,out]  cursor          A pointer to the current parsing
  *                                  position within @a url at which to
@@ -1490,10 +1403,7 @@ static int parse_url_scheme_with_default(const char *url, size_t url_length,
  *  @retval  0        If successful.
  *  @retavl  -EINVAL  If @a url was null, @a url_length was zero, or @a
  *                    cursor was null.
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    scheme.
  *
- *  @sa parse_url_scheme_with_default
  *  @sa parse_url_components
  *
  */
@@ -1501,13 +1411,34 @@ static int parse_url_scheme(const char *url, size_t url_length,
 						const char **cursor,
 						char **scheme)
 {
-	const char * const default_scheme = NULL;
+	static const char * const scheme_delimiter = "://";
+	static const size_t scheme_delimiter_length = 3;
+	const char *result;
+	size_t remaining_length;
+	size_t scheme_length = 0;
 
-	return parse_url_scheme_with_default(url,
-		url_length,
-		cursor,
-		scheme,
-		default_scheme);
+	if (!url || !url_length || !cursor)
+		return -EINVAL;
+
+	remaining_length = url_length - (size_t)(*cursor - url);
+	if (remaining_length) {
+		result = memmem(*cursor,
+					remaining_length,
+					scheme_delimiter,
+					scheme_delimiter_length);
+		if (result) {
+			scheme_length = (size_t)(result - *cursor);
+
+			if (scheme)
+				*scheme = g_strndup(*cursor, scheme_length);
+
+			*cursor += scheme_length + scheme_delimiter_length;
+		} else if (scheme)
+			*scheme = NULL;
+	} else if (scheme)
+		*scheme = NULL;
+
+	return 0;
 }
 
 /**
@@ -1533,9 +1464,10 @@ static int parse_url_scheme(const char *url, size_t url_length,
  *    The caller is responsible for deallocating the memory assigned
  *    to @a *host, if provided, on success.
  *
- *  @param[in]      url             A pointer to the immutable null-
- *                                  terminated C string from which to
- *                                  parse the host component.
+ *  @param[in]      url             A pointer to the immutable string,
+ *                                  of length @a url_length, from
+ *                                  which to parse the host
+ *                                  component.
  *  @param[in]      url_length      The length, in bytes, of @a url.
  *  @param[in,out]  cursor          A pointer to the current parsing
  *                                  position within @a url at which to
@@ -1550,8 +1482,6 @@ static int parse_url_scheme(const char *url, size_t url_length,
  *  @retavl  -EINVAL  If @a url was null, @a url_length was zero, @a
  *                    cursor was null, or if the host portion of @a
  *                    url is malformed.
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    host.
  *
  *  @sa parse_url_host_and_port
  *  @sa parse_url_components
@@ -1561,99 +1491,90 @@ static int parse_url_host(const char *url, size_t url_length,
 						const char **cursor,
 						char **host)
 {
+	static char port_delimiter = ':';
+	static char path_delimiter = '/';
 	size_t remaining_length;
 	size_t host_length	= 0;
 	const char *result;
 	const char *opening_bracket;
 	const char *closing_bracket;
+	int err = 0;
 
 	if (!url || !url_length || !cursor)
 		return -EINVAL;
 
-	// Since it's the easiest to detect, first rule out an IPv6
-	// address. The only reliably way to do so is to search for the
-	// delimiting '[' and ']'. Searching for ':' may yield one of the
-	// other forms above (for example, (2), (5), or (7).
+	/*
+	 * Since it's the easiest to detect, first rule out an IPv6
+	 * address. The only reliably way to do so is to search for the
+	 * delimiting '[' and ']'. Searching for ':' may incorrectly yield
+	 * one of the other forms above (for example, (2), (5), or (7)).
+	 */
+	remaining_length = url_length - (size_t)(*cursor - url);
 
-	remaining_length = (url_length - (size_t)(*cursor - url));
-
-	opening_bracket = (const char *)memchr(*cursor, '[', remaining_length);
+	opening_bracket = memchr(*cursor, '[', remaining_length);
 	if (opening_bracket) {
-		// We found an opening bracket; this might be an IPv6
-		// address. Search for its peer closing bracket.
+		/*
+		 * We found an opening bracket; this might be an IPv6
+		 * address. Search for its peer closing bracket.
+		 */
+		remaining_length = url_length - (size_t)(opening_bracket - url);
 
-		remaining_length = (url_length - (size_t)(opening_bracket - url));
-
-		closing_bracket = (const char *)memchr(opening_bracket,
-									']',
-									remaining_length);
+		closing_bracket = memchr(opening_bracket,
+								']',
+								remaining_length);
 		if (!closing_bracket)
 			return -EINVAL;
 
-		// Assign the first character of the IPv6 address after the
-		// opening bracket up to, but not including, the closing
-		// bracket to the host name.
+		/*
+		 * Assign the first character of the IPv6 address after the
+		 * opening bracket up to, but not including, the closing
+		 * bracket to the host name.
+		 */
+		host_length = closing_bracket - opening_bracket - 1;
 
-		host_length = (size_t)(closing_bracket - opening_bracket) - 1;
-
-		if (host) {
+		if (host_length && host)
 			*host = g_strndup(opening_bracket + 1, host_length);
-			if (!*host)
-				return -ENOMEM;
-		}
-
-		// Move the parsing cursor past the closing bracket.
-
-		*cursor = closing_bracket + 1;
 	} else {
-		// At this point, we either have an IPv4 address or a host
-		// name, maybe with a port.
-		//
-		// Whether we have a port or not, we definitively know where
-		// the IPv4 address or host name ends. If we have a port, it
-		// ends at the port delimiter, ':'. If we don't have a port,
-		// then it ends at the end of the string or at the path
-		// delimiter, if any.
+		/*
+		 * At this point, we either have an IPv4 address or a host
+		 * name, maybe with a port and maybe with a path.
+		 *
+		 * Whether we have a port or not, we definitively know where
+		 * the IPv4 address or host name ends. If we have a port, it
+		 * ends at the port delimiter, ':'. If we don't have a port,
+		 * then it ends at the end of the string or at the path
+		 * delimiter, if any.
+		 */
+		result = memchr(*cursor, port_delimiter, remaining_length);
 
-		result = (const char *)memchr(*cursor, ':', remaining_length);
-		if (result) {
-			// There is a port and an IPv4 address or a host name.
-			// Assign the latter to the host and handle the port
-			// later.
+		/*
+		 * There was no port delimiter; attempt to find a path
+		 * delimiter.
+		 */
+		if (!result)
+			result = memchr(*cursor, path_delimiter, remaining_length);
 
-			host_length = (size_t)(result - *cursor);
+		/*
+		 * Whether stopping at the port or path delimiter, if we had a
+		 * result, the end of the host is the span from the cursor to
+		 * that result. Otherwise, it is simply the remaining length
+		 * of the string.
+		 */
+		if (result)
+			host_length = result - *cursor;
+		else
+			host_length = remaining_length;
 
-			if (host) {
-				*host = g_strndup(*cursor, host_length);
-				if (!*host)
-					return -ENOMEM;
-			}
-
-			*cursor += host_length;
-		} else {
-			// There is no port, just an IPv4 address or a host name,
-			// potentially followed by a path.
-
-			result = (const char *)memchr(*cursor, '/', remaining_length);
-			if (result)
-				host_length = (size_t)(result - *cursor);
-			else
-				host_length = remaining_length;
-
-			if (host) {
-				*host = g_strndup(*cursor, host_length);
-				if (!*host)
-					return -ENOMEM;
-			}
-
-			*cursor += host_length;
-		}
+		if (host_length && host)
+			*host = g_strndup(*cursor, host_length);
 	}
 
 	if (!host_length)
-		return -EINVAL;
+		err = -EINVAL;
+	else
+		*cursor += host_length;
 
-	return 0;
+	return err;
 }
 
 /**
@@ -1674,9 +1595,10 @@ static int parse_url_host(const char *url, size_t url_length,
  *    6. "\<Host Name>"
  *    7. "\<Host Name>:<Port>"
  *
- *  @param[in]      url             A pointer to the immutable null-
- *                                  terminated C string from which to
- *                                  parse the port component.
+ *  @param[in]      url             A pointer to the immutable string,
+ *                                  of length @a url_length, from
+ *                                  which to parse the port
+ *                                  component.
  *  @param[in]      url_length      The length, in bytes, of @a url.
  *  @param[in,out]  cursor          A pointer to the current parsing
  *                                  position within @a url at which to
@@ -1715,22 +1637,19 @@ static int parse_url_port(const char *url, size_t url_length,
 	if (!url || !url_length || !cursor)
 		return -EINVAL;
 
-	remaining_length = (url_length - (size_t)(*cursor - url));
+	remaining_length = url_length - (size_t)(*cursor - url);
 
-	result = (const char *)memchr(*cursor, port_delimiter, remaining_length);
+	result = memchr(*cursor, port_delimiter, remaining_length);
 	if (result) {
 		tmp_port = strtoul(result + port_delimiter_length, &end, 10);
 		if (tmp_port == ULONG_MAX)
 			return -ERANGE;
-		else if (tmp_port < 0 || tmp_port > UINT16_MAX)
+		else if (tmp_port > UINT16_MAX)
 			return -ERANGE;
-		else if (result + 1 == end)
+		else if (result + port_delimiter_length == end)
 			return -EINVAL;
 
-		if (*end != '\0')
-			port_length = remaining_length;
-		else
-			port_length = end - (result + port_delimiter_length);
+		port_length = end - (result + port_delimiter_length);
 
 		*cursor += port_length;
 	} else
@@ -1765,9 +1684,10 @@ static int parse_url_port(const char *url, size_t url_length,
  *    The caller is responsible for deallocating the memory assigned
  *    to @a *host, if provided, on success.
  *
- *  @param[in]      url             A pointer to the immutable null-
- *                                  terminated C string from which to
- *                                  parse the host and port components.
+ *  @param[in]      url             A pointer to the immutable string,
+ *                                  of length @a url_length, from
+ *                                  which to parse the host and port
+ *                                  components.
  *  @param[in]      url_length      The length, in bytes, of @a url.
  *  @param[in,out]  cursor          A pointer to the current parsing
  *                                  position within @a url at which to
@@ -1789,8 +1709,6 @@ static int parse_url_port(const char *url, size_t url_length,
  *                    cursor was null, if the host portion of @a url
  *                    is malformed, or if there were no characters to
  *                    parse after the port delimiter (':').
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    host.
  *  @retval  -ERANGE  If the parsed port was outside of the range [0,
  *                    65535], inclusive.
  *
@@ -1804,30 +1722,29 @@ static int parse_url_host_and_port(const char *url, size_t url_length,
 						char **host,
 						int16_t *port)
 {
-	int err;
+	g_autofree char *temp_host = NULL;
+	int err = 0;
 
 	if (!url || !url_length || !cursor)
 		return -EINVAL;
 
-	// Attempt to handle the host component.
+	/* Attempt to handle the host component. */
 
-	err = parse_url_host(url, url_length, cursor, host);
+	err = parse_url_host(url, url_length, cursor, &temp_host);
 	if (err != 0)
-		return err;
+		goto done;
 
-	// Attempt to handle the port component.
+	/* Attempt to handle the port component. */
 
 	err = parse_url_port(url, url_length, cursor, port);
-	if (err != 0) {
-		if (host) {
-			g_free(*host);
-			*host = NULL;
-		}
+	if (err != 0)
+		goto done;
 
-		return err;
-	}
+	if (host)
+		*host = g_steal_pointer(&temp_host);
 
-	return 0;
+done:
+	return err;
 }
 
 /**
@@ -1843,9 +1760,10 @@ static int parse_url_host_and_port(const char *url, size_t url_length,
  *    The caller is responsible for deallocating the memory assigned
  *    to @a *path, if provided, on success.
  *
- *  @param[in]      url             A pointer to the immutable null-
- *                                  terminated C string from which to
- *                                  parse the path component.
+ *  @param[in]      url             A pointer to the immutable string,
+ *                                  of length @a url_length, from
+ *                                  which to parse the path
+ *                                  component.
  *  @param[in]      url_length      The length, in bytes, of @a url.
  *  @param[in,out]  cursor          A pointer to the current parsing
  *                                  position within @a url at which to
@@ -1859,8 +1777,6 @@ static int parse_url_host_and_port(const char *url, size_t url_length,
  *  @retval  0        If successful.
  *  @retavl  -EINVAL  If @a url was null, @a url_length was zero, or @a
  *                    cursor was null.
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    path.
  *
  *  @sa parse_url_components
  *
@@ -1878,17 +1794,15 @@ static int parse_url_path(const char *url, size_t url_length,
 	if (!url || !url_length || !cursor)
 		return -EINVAL;
 
-	remaining_length = (url_length - (size_t)(*cursor - url));
+	remaining_length = url_length - (size_t)(*cursor - url);
 
-	result = (const char *)memchr(*cursor, path_delimiter, remaining_length);
+	result = memchr(*cursor, path_delimiter, remaining_length);
 	if (result) {
-		path_length = (url_length - (size_t)(result + path_delimiter_length - url));
+		path_length = url_length -
+			(size_t)(result + path_delimiter_length - url);
 
-		if (path) {
+		if (path)
 			*path = g_strndup(result + path_delimiter_length, path_length);
-			if (!*path)
-				return -ENOMEM;
-		}
 
 		*cursor += path_length + path_delimiter_length;
 	} else if (path)
@@ -1919,7 +1833,8 @@ static int parse_url_path(const char *url, size_t url_length,
  *
  *  @param[in]      url             A pointer to the immutable null-
  *                                  terminated C string from which to
- *                                  parse the scheme component.
+ *                                  parse the scheme, host, port, and
+ *                                  path components.
  *  @param[in,out]  scheme          An optional pointer to storage to
  *                                  assign a copy of the parsed scheme
  *                                  on success.
@@ -1940,8 +1855,6 @@ static int parse_url_path(const char *url, size_t url_length,
  *                    the host portion of @a url is malformed, or if
  *                    there were no characters to parse after the port
  *                    delimiter (':').
- *  @retval  -ENOMEM  If memory could not be allocated for the parsed
- *                    scheme, host, or path.
  *  @retval  -ERANGE  If the parsed port was outside of the range [0,
  *                    65535], inclusive.
  *
@@ -1961,7 +1874,9 @@ static int parse_url_components(const char *url,
 {
 	size_t total_length;
 	const char *p;
-	int err;
+	g_autofree char *temp_scheme = NULL;
+	g_autofree char *temp_host = NULL;
+	int err = 0;
 
 	if (!url)
 		return -EINVAL;
@@ -1972,47 +1887,234 @@ static int parse_url_components(const char *url,
 	if (!total_length)
 		return -EINVAL;
 
-	// Skip any leading space, if any.
+	/* Skip any leading space, if any. */
 
-	while ((p < (url + total_length)) && isspace(*p))
+	while (g_ascii_isspace(*p))
 		p++;
 
-	// Attempt to handle the scheme component.
+	/* Attempt to handle the scheme component. */
 
-	err = parse_url_scheme(url, total_length, &p, scheme);
+	err = parse_url_scheme(url, total_length, &p, &temp_scheme);
 	if (err != 0)
-		return err;
+		goto done;
 
-	// Attempt to handle the host component.
+	/* Attempt to handle the host component. */
 
-	err = parse_url_host_and_port(url, total_length, &p, host, port);
-	if (err != 0) {
-		if (scheme) {
-			g_free(*scheme);
-			*scheme = NULL;
-		}
+	err = parse_url_host_and_port(url, total_length, &p, &temp_host, port);
+	if (err != 0)
+		goto done;
 
-		return err;
-	}
-
-	// Attempt to handle the path component.
+	/* Attempt to handle the path component. */
 
 	err = parse_url_path(url, total_length, &p, path);
-	if (err != 0) {
-		if (scheme) {
-			g_free(*scheme);
-			*scheme = NULL;
-		}
+	if (err != 0)
+		goto done;
 
-		if (host) {
-			g_free(*host);
-			*host = NULL;
-		}
+	if (scheme)
+		*scheme = g_steal_pointer(&temp_scheme);
 
-		return err;
+	if (host)
+		*host = g_steal_pointer(&temp_host);
+
+done:
+	return err;
+}
+
+/**
+ *	@brief
+ *	  Attempt to parse the request URL for the web request session.
+ *
+ *	This attempts to parse the specified request URL for the specified
+ *	web request session. From the request URL, the scheme is parsed,
+ *	mapped and assigned to the @a session port field and the host and
+ *	path are parsed, copied, and assigned to the host and request
+ *	fields, respectively.
+ *
+ *	Compliant with RFC 2732, the format of the host component of the
+ *	request and proxy URLs may be one of the following:
+ *
+ *	  1. "[\<IPv6 Address>]"
+ *	  2. "[\<IPv6 Address>]:<Port>"
+ *	  4. "\<IPv4 Address>"
+ *	  5. "\<IPv4 Address>:<Port>"
+ *	  6. "\<Host Name>"
+ *	  7. "\<Host Name>:<Port>"
+ *
+ *	@note
+ *	  The caller is responsible for deallocating the memory assigned
+ *	  to the @a session host, request, and address fields.
+ *
+ *	@param[in,out]	session	     A pointer to the mutable web session
+ *							     request object to be populated from
+ *							     @a url and, if provided, @a proxy. On
+ *							     success, the session port, host,
+ *							     request, and address fields will be
+ *							     populated from the parsed request URL.
+ *	@param[in]		request_url  A pointer to the immutable null-
+ *							     terminated C string containing the
+ *							     request URL to parse.
+ *
+ *	@retval	 0		  If successful.
+ *	@retval	 -EINVAL  If @request_url was not a valid URL.
+ *
+ *  @sa parse_url_components
+ *
+ */
+static int parse_request_url(struct web_session *session,
+				const char *request_url, bool has_proxy_url)
+{
+	g_autofree char *scheme = NULL;
+	g_autofree char *host = NULL;
+	g_autofree char *path = NULL;
+	int16_t port = -1;
+	int err = 0;
+
+	if (!session || !request_url)
+		return -EINVAL;
+
+	/* Parse the request URL components. */
+
+	err = parse_url_components(request_url,
+			&scheme,
+			&host,
+			&port,
+			&path);
+	if (err != 0)
+		goto done;
+
+	/*
+	 * Handle the URL scheme, if any, for the session, defaulting to
+	 * the "http" scheme and port 80.
+	 */
+	if (scheme) {
+		if (g_ascii_strcasecmp(scheme, "https") == 0)
+			session->port = 443;
+		else if (g_ascii_strcasecmp(scheme, "http") == 0)
+			session->port = 80;
+		else {
+			err = -EINVAL;
+			goto done;
+		}
+	} else
+		session->port = 80;
+
+	/* Handle the URL host and port, if any, for the session. */
+
+	if (port != -1) {
+		session->port = port;
+
+		if (!has_proxy_url)
+			session->host = g_strdup(host);
+		else
+			session->host = g_strdup_printf("%s:%u", host, port);
+	} else
+		session->host = g_strdup(host);
+
+	/* Handle the URL path, if any, for the session. */
+
+	if (!has_proxy_url)
+		session->request = g_strdup_printf("/%s", path ? path : "");
+	else
+		session->request = g_strdup(request_url);
+
+done:
+	return err;
+}
+
+/**
+ *	@brief
+ *	  Attempt to parse the proxy URL for the web request session.
+ *
+ *	This attempts to parse the specified proxy URL for the specified
+ *	web request session. From the proxy URL, the port component is
+ *	parsed and assigned to the @a session port field and the host
+ *	component is parsed, copied, and assigned to the address field.
+ *
+ *	Compliant with RFC 2732, the format of the host component of the
+ *	request and proxy URLs may be one of the following:
+ *
+ *	  1. "[\<IPv6 Address>]"
+ *	  2. "[\<IPv6 Address>]:<Port>"
+ *	  4. "\<IPv4 Address>"
+ *	  5. "\<IPv4 Address>:<Port>"
+ *	  6. "\<Host Name>"
+ *	  7. "\<Host Name>:<Port>"
+ *
+ *	@note
+ *	  The caller is responsible for deallocating the memory assigned
+ *	  to the @a session address field.
+ *
+ *	@param[in,out]	session	     A pointer to the mutable web session
+ *							     request object to be populated from
+ *							     @a url and, if provided, @a proxy. On
+ *							     success, the session port and address
+ *							     fields will be populated from the
+ *							     parsed proxy URL.
+ *	@param[in]		proxy_url    A pointer to the immutable null-
+ *							     terminated C string containing the
+ *							     web proxy URL to parse.
+ *
+ *	@retval	 0		  If successful.
+ *	@retval	 -EINVAL  If @a proxy_url was not a valid URL.
+ *
+ *  @sa parse_url_scheme
+ *  @sa parse_url_host_and_port
+ *
+ */
+static int parse_proxy_url(struct web_session *session, const char *proxy_url)
+{
+	const char *p;
+	size_t proxy_length;
+	g_autofree char *scheme = NULL;
+	g_autofree char *host = NULL;
+	int16_t port = -1;
+	int err = 0;
+
+	if (!session || !proxy_url)
+		return -EINVAL;
+
+	/*
+	 * Parse the proxy URL scheme, host, and port, the only three
+	 * components we care about.
+	 */
+	p = proxy_url;
+	proxy_length = strlen(p);
+
+	err = parse_url_scheme(proxy_url,
+			proxy_length,
+			&p,
+			&scheme);
+	if (err != 0)
+		goto done;
+
+	err = parse_url_host_and_port(proxy_url,
+			proxy_length,
+			&p,
+			&host,
+			&port);
+	if (err != 0)
+		goto done;
+
+	/*
+	 * Handle the proxy URL scheme, if any, for the session. Only
+	 * "http" is allowed.
+	 */
+	if (scheme && g_ascii_strcasecmp(scheme, "http") != 0) {
+		err = -EINVAL;
+		goto done;
 	}
 
-	return 0;
+	/*
+	 * Handle the proxy URL host and port for the session.
+	 */
+	if (host)
+		session->address = host;
+
+	if (port != -1)
+		session->port = port;
+
+done:
+	return err;
 }
 
 /**
@@ -2059,157 +2161,36 @@ static int parse_url_components(const char *url,
  *  @retval  0         If successful.
  *  @retval  -EINVAL  If @url was not a valid URL.
  *
+ *  @sa parse_request_url
+ *  @sa parse_proxy_url
+ *
  */
 static int parse_request_and_proxy_urls(struct web_session *session,
 				const char *url, const char *proxy)
 {
-	size_t proxy_length;
-	const char *p;
-	char *scheme = NULL;
-	char *host = NULL;
-	char *path = NULL;
-	int16_t port = -1;
-	int err;
+	const bool has_proxy_url = (proxy != NULL);
+	int err = 0;
 
 	if (!session || !url)
 		return -EINVAL;
 
-	p = url;
+	/* Parse and handle the request URL */
 
-	// Parse the URL components.
-
-	err = parse_url_components(url,
-							   &scheme,
-							   &host,
-							   &port,
-							   &path);
-	if (err != 0) {
-		g_free(scheme);
-		g_free(host);
-		g_free(path);
-
-		return err;
-	}
-
-	// Handle the URL scheme, if any, for the session, defaulting to
-	// the "http" scheme and port 80.
-
-	if (scheme) {
-		if (strcasecmp(scheme, "https") == 0) {
-			session->port = 443;
-		} else if (strcasecmp(scheme, "http") == 0) {
-			session->port = 80;
-		} else {
-			g_free(scheme);
-			g_free(host);
-			g_free(path);
-			return -EINVAL;
-		}
-
-		g_free(scheme);
-	} else {
-		session->port = 80;
-	}
-
-	// Handle the URL host and port, if any, for the session.
-
-	if (port != -1) {
-		session->port = port;
-
-		if (!proxy) {
-			session->host = g_strdup(host);
-			if (!session->host) {
-				g_free(host);
-				g_free(path);
-				return -ENOMEM;
-			}
-		} else {
-			session->host = g_strdup_printf("%s:%u", host, port);
-			if (!session->host) {
-				g_free(host);
-				g_free(path);
-				return -ENOMEM;
-			}
-		}
-	} else {
-		session->host = g_strdup(host);
-		if (!session->host) {
-			g_free(host);
-			g_free(path);
-			return -ENOMEM;
-		}
-	}
-
-	// Handle the URL path, if any, for the session.
-
-	if (!proxy) {
-		session->request = g_strdup_printf("/%s", path ? path : "");
-		if (!session->request) {
-			g_free(host);
-			g_free(path);
-			return -ENOMEM;
-		}
-	} else {
-		session->request = g_strdup(url);
-		if (!session->request) {
-			g_free(host);
-			g_free(path);
-			return -ENOMEM;
-		}
-	}
-
-	g_free(host);
-	g_free(path);
-
-	if (!proxy)
-		return 0;
-
-	// Parse the proxy scheme, host, and port, the only three
-	// components we care about.
-
-	p = proxy;
-	proxy_length = strlen(p);
-
-	err = parse_url_scheme(proxy,
-						   proxy_length,
-						   &p,
-						   &scheme);
+	err = parse_request_url(session, url, has_proxy_url);
 	if (err != 0)
-		return err;
+		goto done;
 
-	err = parse_url_host_and_port(proxy,
-								  proxy_length,
-								  &p,
-								  &host,
-								  &port);
-	if (err != 0) {
-		g_free(scheme);
+	if (!has_proxy_url)
+		goto done;
 
-		return err;
-	}
+	/* Parse and handle the proxy URL */
 
-	// Handle the proxy URL scheme, if any, for the session. Only
-	// "http" is allowed.
+	err = parse_proxy_url(session, proxy);
+	if (err != 0)
+		goto done;
 
-	if (scheme) {
-		if (strcasecmp(scheme, "http") != 0) {
-			g_free(scheme);
-			g_free(host);
-			return -EINVAL;
-		}
-
-		g_free(scheme);
-	}
-
-	// Handle the proxy URL host and port for the session.
-
-	if (host)
-		session->address = host;
-
-	if (port != -1)
-		session->port = port;
-
-	return 0;
+done:
+	return err;
 }
 
 static void handle_resolved_address(struct web_session *session)
