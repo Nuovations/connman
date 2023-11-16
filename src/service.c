@@ -166,6 +166,7 @@ static void complete_online_check(struct connman_service *service,
 					bool success,
 					int err);
 static bool service_downgrade_online_state(struct connman_service *service);
+static bool connman_service_is_default(const struct connman_service *service);
 
 struct find_data {
 	const char *path;
@@ -2065,7 +2066,7 @@ static void address_updated(struct connman_service *service,
 			enum connman_ipconfig_type type)
 {
 	if (is_connected(service->state) &&
-			service == connman_service_get_default()) {
+			connman_service_is_default(service)) {
 		nameserver_remove_all(service, type);
 		nameserver_add_all(service, type);
 		start_online_check(service, type);
