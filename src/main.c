@@ -111,7 +111,7 @@ static struct {
 	bool enable_online_to_ready_transition;
 	char *online_check_ipv4_url;
 	char *online_check_ipv6_url;
-    unsigned int online_check_connect_timeout_ms;
+	unsigned int online_check_connect_timeout_ms;
 	unsigned int online_check_initial_interval;
 	unsigned int online_check_max_interval;
 	char *online_check_interval_style;
@@ -143,7 +143,7 @@ static struct {
 	.enable_online_to_ready_transition = false,
 	.online_check_ipv4_url = NULL,
 	.online_check_ipv6_url = NULL,
-    .online_check_connect_timeout_ms = DEFAULT_ONLINE_CHECK_CONNECT_TIMEOUT,
+	.online_check_connect_timeout_ms = DEFAULT_ONLINE_CHECK_CONNECT_TIMEOUT,
 	.online_check_initial_interval = DEFAULT_ONLINE_CHECK_INITIAL_INTERVAL,
 	.online_check_max_interval = DEFAULT_ONLINE_CHECK_MAX_INTERVAL,
 	.online_check_interval_style = NULL,
@@ -343,7 +343,7 @@ static void parse_config(GKeyFile *config)
 	char *string;
 	gsize len;
 	int integer;
-    double real;
+	double real;
 
 	if (!config) {
 		connman_settings.auto_connect =
@@ -547,7 +547,8 @@ static void parse_config(GKeyFile *config)
 			connman_settings.online_check_connect_timeout_ms =
 				DEFAULT_ONLINE_CHECK_CONNECT_TIMEOUT;
 		} else
-			connman_settings.online_check_connect_timeout_ms = real * 1000;
+			connman_settings.online_check_connect_timeout_ms =
+				real * 1000;
 	}
 
 	if (connman_settings.online_check_connect_timeout_ms)

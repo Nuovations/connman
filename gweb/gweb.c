@@ -204,7 +204,7 @@ static gboolean connect_timeout_cb(gpointer user_data)
 	struct web_session *session = user_data;
 
 	debug(session->web, "session %p connect timeout after %ums",
-				session, g_web_get_connect_timeout(session->web));
+			session, g_web_get_connect_timeout(session->web));
 
 	session->connect_timeout = 0;
 
@@ -1290,12 +1290,13 @@ static inline int bind_socket(int sk, int index, int family)
  *                    bound to the specified session network
  *                    interface, or the socket could not connect to
  *                    the specified session peer address.
- *  @retval  -ENOMEM  If a GLib transport channle could not be created.
+ *  @retval  -ENOMEM  If a GLib transport channel could not be created.
  *
  *  @sa close_session_transport
  *
  */
-static int connect_session_transport(struct web_session *session, guint connect_timeout_ms)
+static int connect_session_transport(struct web_session *session,
+			guint connect_timeout_ms)
 {
 	GIOFlags flags;
 	int sk;
@@ -1363,7 +1364,7 @@ static int create_transport(struct web_session *session)
 	int err;
 
 	err = connect_session_transport(session,
-					g_web_get_connect_timeout(session->web));
+			g_web_get_connect_timeout(session->web));
 	if (err < 0)
 		return err;
 
@@ -2354,8 +2355,14 @@ static guint do_request(GWeb *web, const char *url,
 					host, resolv_result, session);
 		if (session->resolv_action <= 0) {
 			free_session(session);
-			status = session->resolv_action < 0 ?
-						session->resolv_action :
+			/*
+			 * While the return signature of #g_resolv_lookup_hostname
+			 * is 'guint', it overloads this, treating it as 'int' and
+			 * does potentially return -EIO. Consequently, apply the
+			 * 'int' casts to handle these cases.
+			 */
+			status = (int)session->resolv_action < 0 ?
+						(int)session->resolv_action :
 						-ENOENT;
 			goto done;
 		}

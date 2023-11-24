@@ -1224,6 +1224,7 @@ static bool is_wispr_supported(const struct connman_service *service)
 	case CONNMAN_SERVICE_TYPE_GPS:
 	case CONNMAN_SERVICE_TYPE_VPN:
 	case CONNMAN_SERVICE_TYPE_P2P:
+	default:
 		return false;
 	}
 }

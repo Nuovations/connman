@@ -1500,7 +1500,8 @@ static bool check_proxy_setup(struct connman_service *service)
 		return true;
 
 	if (__connman_wpad_start(service) < 0) {
-		connman_service_set_proxy_method(service, CONNMAN_SERVICE_PROXY_METHOD_DIRECT);
+		connman_service_set_proxy_method(service,
+			CONNMAN_SERVICE_PROXY_METHOD_DIRECT);
 		return true;
 	}
 
