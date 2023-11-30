@@ -892,11 +892,17 @@ static void set_default_gateway(struct gateway_data *data,
 				return;
 
 			data->ipv4_config->active = true;
+
+			DBG("set %p index %d",
+				data, data->index);
 		} else {
 			status4 = __connman_inet_add_default_to_table(
 						RT_TABLE_MAIN,
 						data->index,
 						data->ipv4_config->gateway);
+
+			DBG("set %p index %d gateway %s",
+				data, data->index, data->ipv4_config->gateway);
 		}
 	}
 
@@ -916,13 +922,21 @@ static void set_default_gateway(struct gateway_data *data,
 				return;
 
 			data->ipv6_config->active = true;
+
+			DBG("set %p index %d",
+				data, data->index);
 		} else {
 			status6 = __connman_inet_add_default_to_table(
 						RT_TABLE_MAIN,
 						data->index,
 						data->ipv6_config->gateway);
+
+			DBG("set %p index %d gateway %s",
+				data, data->index, data->ipv4_config->gateway);
 		}
 	}
+
+	DBG("status4 %d status6 %d", status4, status6);
 
 	if (status4 < 0 || status6 < 0)
 		return;
@@ -963,9 +977,15 @@ static void unset_default_gateway(struct gateway_data *data,
 			connman_inet_clear_gateway_interface(data->index);
 
 			data->ipv4_config->active = false;
+
+			DBG("unset %p index %d",
+				data, data->index);
 		} else {
 			connman_inet_clear_gateway_address(data->index,
 						data->ipv4_config->gateway);
+
+			DBG("unset %p index %d gateway %s",
+				data, data->index, data->ipv4_config->gateway);
 		}
 	}
 
@@ -983,9 +1003,15 @@ static void unset_default_gateway(struct gateway_data *data,
 			connman_inet_clear_ipv6_gateway_interface(data->index);
 
 			data->ipv6_config->active = false;
+
+			DBG("unset %p index %d",
+				data, data->index);
 		} else {
 			connman_inet_clear_ipv6_gateway_address(data->index,
 						data->ipv6_config->gateway);
+
+			DBG("unset %p index %d gateway %s",
+				data, data->index, data->ipv4_config->gateway);
 		}
 	}
 }
