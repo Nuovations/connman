@@ -108,54 +108,7 @@ struct connman_debug_desc {
 		CONNMAN_DEBUG_FLAG_ALIAS)
 
 /**
- *  @def CONNMAN_DEBUG(function, fmt, args...)
- *
- *  @brief
- *    Convenience preprocessor macro for declaring and instantiating
- *    an instance of #connmand_debug_desc for controlling an
- *    invocation of #connman_debug with it that includes both the
- *    file and function name the macro was invoked in or attributed
- *    to.
- *
- *  This instantiates a scoped-instance of #connmand_debug_desc and
- *  then, if that instance has its #CONNMAN_DEBUG_FLAG_PRINT flag
- *  asserted, invokes a call to #connman_debug with the format:
- *
- *    "<file>:<function>() <fmt> ..."
- *
- *  where <file> is the preprocessor symbol __FILE__, <function> is
- *  caller-specified, <fmt> is from @a fmt, and '...' is from @a
- *  'args...'.
- *
- *  @param[in]  function  A pointer to an immutble null-terminated C
- *                        string containing the name of the function
- *                        in which the macro is being instantiated or
- *                        to which the invocation of the macro should
- *                        be attributed to. For example, __FUNCTION__.
- *  @param[in]  fmt       A pointer to an immutable null-terminated C
- *                        string container the log message, consisting
- *                        of a printf-style format string composed of
- *                        zero or more output conversion directives.
- *  @param[in]  args...   A variadic argument list, where each
- *                        argument corresponds with its peer output
- *                        conversion directive in @a fmt.
- *
- *  @sa CONNMAN_DEBUG_DESC_INSTANTIATE
- *  @sa connman_debug
- *
- */
-#define CONNMAN_DEBUG(function, fmt, args...) do { \
-	CONNMAN_DEBUG_DESC_INSTANTIATE(__connman_debug_desc, \
-		0, \
-		__FILE__, \
-		CONNMAN_DEBUG_FLAG_DEFAULT); \
-		if (__connman_debug_desc.flags & CONNMAN_DEBUG_FLAG_PRINT) \
-			connman_debug("%s:%s() " fmt, \
-					__FILE__, function, ##args); \
-	} while (0)
-
-/**
- *  @def DBG(fmt, args...)
+ *  @def DBG(fmt, arg...)
  *
  *  @brief
  *    Convenience preprocessor macro for declaring an instance of
@@ -171,21 +124,28 @@ struct connman_debug_desc {
  *
  *  where <file> is the preprocessor symbol __FILE__, <function> is
  *  the preprocessor symbol __func__, <fmt> is from @a fmt, and
- *  '...' is from @a 'args...'.
+ *  '...' is from @a 'arg...'.
  *
  *  @param[in]  fmt      A pointer to an immutable null-terminated C
  *                       string container the log message, consisting
  *                       of a printf-style format string composed of
  *                       zero or more output conversion directives.
- *  @param[in]  args...  A variadic argument list, where each
+ *  @param[in]  arg...   A variadic argument list, where each
  *                       argument corresponds with its peer output
  *                       conversion directive in @a fmt.
  *
- *  @sa CONNMAN_DEBUG
  *  @sa connman_debug
  *
  */
-#define DBG(fmt, args...) CONNMAN_DEBUG(__func__, fmt, ##args)
+#define DBG(fmt, arg...) do { \
+	CONNMAN_DEBUG_DESC_INSTANTIATE(__connman_debug_desc, \
+		0, \
+		__FILE__, \
+		CONNMAN_DEBUG_FLAG_DEFAULT); \
+		if (__connman_debug_desc.flags & CONNMAN_DEBUG_FLAG_PRINT) \
+			connman_debug("%s:%s() " fmt, \
+					__FILE__, __func__, ##arg); \
+} while (0)
 
 #ifdef __cplusplus
 }

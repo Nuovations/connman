@@ -670,7 +670,9 @@ static void process_deladdr(unsigned char family, unsigned char prefixlen,
 
 static void extract_ipv4_route(struct rtmsg *msg, int bytes, int *index,
 						struct in_addr *dst,
-						struct in_addr *gateway)
+						struct in_addr *gateway,
+						uint32_t *table_id,
+						uint32_t *metric)
 {
 	struct rtattr *attr;
 
@@ -689,13 +691,23 @@ static void extract_ipv4_route(struct rtmsg *msg, int bytes, int *index,
 			if (index)
 				*index = *((int *) RTA_DATA(attr));
 			break;
+		case RTA_TABLE:
+			if (table_id)
+				*table_id = *((uint32_t *) RTA_DATA(attr));
+			break;
+		case RTA_PRIORITY:
+			if (metric)
+				*metric = *((uint32_t *) RTA_DATA(attr));
+			break;
 		}
 	}
 }
 
 static void extract_ipv6_route(struct rtmsg *msg, int bytes, int *index,
 						struct in6_addr *dst,
-						struct in6_addr *gateway)
+						struct in6_addr *gateway,
+						uint32_t *table_id,
+						uint32_t *metric)
 {
 	struct rtattr *attr;
 
@@ -715,6 +727,14 @@ static void extract_ipv6_route(struct rtmsg *msg, int bytes, int *index,
 			if (index)
 				*index = *((int *) RTA_DATA(attr));
 			break;
+		case RTA_TABLE:
+			if (table_id)
+				*table_id = *((uint32_t *) RTA_DATA(attr));
+			break;
+		case RTA_PRIORITY:
+			if (metric)
+				*metric = *((uint32_t *) RTA_DATA(attr));
+			break;
 		}
 	}
 }
@@ -725,17 +745,23 @@ static void process_newroute(unsigned char family, unsigned char scope,
 	GSList *list;
 	char dststr[INET6_ADDRSTRLEN], gatewaystr[INET6_ADDRSTRLEN];
 	int index = -1;
+	uint32_t table_id = RT_TABLE_UNSPEC;
+	uint32_t metric = 0;
 
 	if (family == AF_INET) {
 		struct in_addr dst = { INADDR_ANY }, gateway = { INADDR_ANY };
 
-		extract_ipv4_route(msg, bytes, &index, &dst, &gateway);
+		extract_ipv4_route(msg, bytes, &index, &dst, &gateway,
+			&table_id, &metric);
 
 		inet_ntop(family, &dst, dststr, sizeof(dststr));
 		inet_ntop(family, &gateway, gatewaystr, sizeof(gatewaystr));
 
 		__connman_ipconfig_newroute(index, family, scope, dststr,
-								gatewaystr);
+							msg->rtm_dst_len,
+							gatewaystr,
+							table_id,
+							metric);
 
 		/* skip host specific routes */
 		if (scope != RT_SCOPE_UNIVERSE &&
@@ -749,13 +775,17 @@ static void process_newroute(unsigned char family, unsigned char scope,
 		struct in6_addr dst = IN6ADDR_ANY_INIT,
 				gateway = IN6ADDR_ANY_INIT;
 
-		extract_ipv6_route(msg, bytes, &index, &dst, &gateway);
+		extract_ipv6_route(msg, bytes, &index, &dst, &gateway,
+			&table_id, &metric);
 
 		inet_ntop(family, &dst, dststr, sizeof(dststr));
 		inet_ntop(family, &gateway, gatewaystr, sizeof(gatewaystr));
 
 		__connman_ipconfig_newroute(index, family, scope, dststr,
-								gatewaystr);
+							msg->rtm_dst_len,
+							gatewaystr,
+							table_id,
+							metric);
 
 		/* skip host specific routes */
 		if (scope != RT_SCOPE_UNIVERSE &&
@@ -782,17 +812,23 @@ static void process_delroute(unsigned char family, unsigned char scope,
 	GSList *list;
 	char dststr[INET6_ADDRSTRLEN], gatewaystr[INET6_ADDRSTRLEN];
 	int index = -1;
+	uint32_t table_id = RT_TABLE_UNSPEC;
+	uint32_t metric = 0;
 
 	if (family == AF_INET) {
 		struct in_addr dst = { INADDR_ANY }, gateway = { INADDR_ANY };
 
-		extract_ipv4_route(msg, bytes, &index, &dst, &gateway);
+		extract_ipv4_route(msg, bytes, &index, &dst, &gateway,
+			&table_id, &metric);
 
 		inet_ntop(family, &dst, dststr, sizeof(dststr));
 		inet_ntop(family, &gateway, gatewaystr, sizeof(gatewaystr));
 
 		__connman_ipconfig_delroute(index, family, scope, dststr,
-								gatewaystr);
+							msg->rtm_dst_len,
+							gatewaystr,
+							table_id,
+							metric);
 
 		/* skip host specific routes */
 		if (scope != RT_SCOPE_UNIVERSE &&
@@ -806,13 +842,17 @@ static void process_delroute(unsigned char family, unsigned char scope,
 		struct in6_addr dst = IN6ADDR_ANY_INIT,
 				gateway = IN6ADDR_ANY_INIT;
 
-		extract_ipv6_route(msg, bytes, &index, &dst, &gateway);
+		extract_ipv6_route(msg, bytes, &index, &dst, &gateway,
+			&table_id, &metric);
 
 		inet_ntop(family, &dst, dststr, sizeof(dststr));
 		inet_ntop(family, &gateway, gatewaystr, sizeof(gatewaystr));
 
 		__connman_ipconfig_delroute(index, family, scope, dststr,
-						gatewaystr);
+							msg->rtm_dst_len,
+							gatewaystr,
+							table_id,
+							metric);
 
 		/* skip host specific routes */
 		if (scope != RT_SCOPE_UNIVERSE &&
