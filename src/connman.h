@@ -174,6 +174,8 @@ int __connman_inet_get_interface_mac_address(int index, uint8_t *mac_address);
 
 bool __connman_inet_is_any_addr(const char *address, int family);
 
+const char *__connman_inet_table2string(uint32_t table_id);
+
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 
@@ -252,9 +254,17 @@ int __connman_inet_rtnl_addattr32(struct nlmsghdr *n, size_t maxlen,
 int __connman_inet_add_fwmark_rule(uint32_t table_id, int family, uint32_t fwmark);
 int __connman_inet_del_fwmark_rule(uint32_t table_id, int family, uint32_t fwmark);
 int __connman_inet_add_default_to_table(uint32_t table_id, int ifindex, const char *gateway);
+int __connman_inet_add_default_to_table_with_metric(uint32_t table_id,
+			int ifindex,
+			const char *gateway,
+			uint32_t metric);
 int __connman_inet_add_subnet_to_table(uint32_t table_id, int ifindex,
 			const char *gateway, unsigned char prefixlen);
 int __connman_inet_del_default_from_table(uint32_t table_id, int ifindex, const char *gateway);
+int __connman_inet_del_default_from_table_with_metric(uint32_t table_id,
+			int ifindex,
+			const char *gateway,
+			uint32_t metric);
 int __connman_inet_del_subnet_from_table(uint32_t table_id, int ifindex,
 			const char *gateway, unsigned char prefixlen);
 int __connman_inet_get_address_netmask(int ifindex,
@@ -365,9 +375,15 @@ int __connman_ipconfig_newaddr(int index, int family, const char *label,
 void __connman_ipconfig_deladdr(int index, int family, const char *label,
 				unsigned char prefixlen, const char *address);
 void __connman_ipconfig_newroute(int index, int family, unsigned char scope,
-					const char *dst, const char *gateway);
+					const char *dst,
+					unsigned char dst_prefixlen,
+					const char *gateway,
+					uint32_t table_id, uint32_t metric);
 void __connman_ipconfig_delroute(int index, int family, unsigned char scope,
-					const char *dst, const char *gateway);
+					const char *dst,
+					unsigned char dst_prefixlen,
+					const char *gateway,
+					uint32_t table_id, uint32_t metric);
 
 void __connman_ipconfig_foreach(void (*function) (int index, void *user_data),
 							void *user_data);
