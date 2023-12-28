@@ -69,15 +69,7 @@
 #define MAINFILE "main.conf"
 #define CONFIGMAINFILE CONFIGDIR "/" MAINFILE
 
-/*
- * This is declared as 'const char *const' to effect an immutable
- * pointer to an immutable null-terminated character string such that
- * it ends up in .text, not .data (which would otherwise be the case
- * for a 'const char *' declaration), and with the 'static'
- * storage/scope qualifier, the compiler can optimize its use within
- * this file as it sees fit.
- */
-static const char *const general_group_name = "General";
+#define GENERAL_GROUP "General"
 
 static char *default_auto_connect[] = {
 	"wifi",
@@ -331,14 +323,14 @@ static void check_config(GKeyFile *config)
 	keys = g_key_file_get_groups(config, NULL);
 
 	for (j = 0; keys && keys[j]; j++) {
-		if (g_strcmp0(keys[j], general_group_name) != 0)
+		if (g_strcmp0(keys[j], GENERAL_GROUP) != 0)
 			connman_warn("Unknown group %s in %s",
 						keys[j], MAINFILE);
 	}
 
 	g_strfreev(keys);
 
-	keys = g_key_file_get_keys(config, general_group_name, NULL, NULL);
+	keys = g_key_file_get_keys(config, GENERAL_GROUP, NULL, NULL);
 
 	for (j = 0; keys && keys[j]; j++) {
 		bool found;
@@ -460,21 +452,21 @@ static void parse_config(GKeyFile *config)
 
 	DBG("parsing %s", MAINFILE);
 
-	boolean = g_key_file_get_boolean(config, general_group_name,
+	boolean = g_key_file_get_boolean(config, GENERAL_GROUP,
 						CONF_BG_SCAN, &error);
 	if (!error)
 		connman_settings.bg_scan = boolean;
 
 	g_clear_error(&error);
 
-	timeservers = __connman_config_get_string_list(config, general_group_name,
+	timeservers = __connman_config_get_string_list(config, GENERAL_GROUP,
 					CONF_PREF_TIMESERVERS, NULL, &error);
 	if (!error)
 		connman_settings.pref_timeservers = timeservers;
 
 	g_clear_error(&error);
 
-	str_list = __connman_config_get_string_list(config, general_group_name,
+	str_list = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_AUTO_CONNECT_TECHS, &len, &error);
 
 	if (!error)
@@ -488,7 +480,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	str_list = __connman_config_get_string_list(config, general_group_name,
+	str_list = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_FAVORITE_TECHS, &len, &error);
 
 	if (!error)
@@ -502,7 +494,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	str_list = __connman_config_get_string_list(config, general_group_name,
+	str_list = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_PREFERRED_TECHS, &len, &error);
 
 	if (!error)
@@ -513,7 +505,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	str_list = __connman_config_get_string_list(config, general_group_name,
+	str_list = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_ALWAYS_CONNECTED_TECHS, &len, &error);
 
 	if (!error)
@@ -524,7 +516,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	str_list = __connman_config_get_string_list(config, general_group_name,
+	str_list = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_FALLBACK_NAMESERVERS, &len, &error);
 
 	if (!error)
@@ -535,21 +527,21 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	integer = g_key_file_get_integer(config, general_group_name,
+	integer = g_key_file_get_integer(config, GENERAL_GROUP,
 			CONF_TIMEOUT_INPUTREQ, &error);
 	if (!error && integer >= 0)
 		connman_settings.timeout_inputreq = integer * 1000;
 
 	g_clear_error(&error);
 
-	integer = g_key_file_get_integer(config, general_group_name,
+	integer = g_key_file_get_integer(config, GENERAL_GROUP,
 			CONF_TIMEOUT_BROWSERLAUNCH, &error);
 	if (!error && integer >= 0)
 		connman_settings.timeout_browserlaunch = integer * 1000;
 
 	g_clear_error(&error);
 
-	interfaces = __connman_config_get_string_list(config, general_group_name,
+	interfaces = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_BLACKLISTED_INTERFACES, &len, &error);
 
 	if (!error)
@@ -560,7 +552,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 					CONF_ALLOW_HOSTNAME_UPDATES,
 					&error);
 	if (!error)
@@ -568,7 +560,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 					CONF_ALLOW_DOMAINNAME_UPDATES,
 					&error);
 	if (!error)
@@ -576,14 +568,14 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 			CONF_SINGLE_TECH, &error);
 	if (!error)
 		connman_settings.single_tech = boolean;
 
 	g_clear_error(&error);
 
-	tethering = __connman_config_get_string_list(config, general_group_name,
+	tethering = __connman_config_get_string_list(config, GENERAL_GROUP,
 			CONF_TETHERING_TECHNOLOGIES, &len, &error);
 
 	if (!error)
@@ -591,7 +583,7 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 					CONF_PERSISTENT_TETHERING_MODE,
 					&error);
 	if (!error)
@@ -599,14 +591,14 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 					CONF_ENABLE_6TO4, &error);
 	if (!error)
 		connman_settings.enable_6to4 = boolean;
 
 	g_clear_error(&error);
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 					CONF_VENDOR_CLASS_ID, &error);
 	if (!error)
 		connman_settings.vendor_class_id = string;
@@ -615,7 +607,7 @@ static void parse_config(GKeyFile *config)
 
 	/* EnableOnlineCheck */
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 					CONF_ENABLE_ONLINE_CHECK, &error);
 	if (!error) {
 		connman_warn("\"%s\" is deprecated; use \"%s\" instead.",
@@ -629,7 +621,7 @@ static void parse_config(GKeyFile *config)
 
 	/* EnableOnlineToReadyTransition */
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 			CONF_ENABLE_ONLINE_TO_READY_TRANSITION, &error);
 	if (!error) {
 		connman_warn("\"%s\" is deprecated; use \"%s\" instead.",
@@ -643,7 +635,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckMode */
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 				CONF_ONLINE_CHECK_MODE, &error);
 	if (!error) {
 		connman_settings.online_check_mode =
@@ -663,7 +655,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckConnectTimeout */
 
-	real = g_key_file_get_double(config, general_group_name,
+	real = g_key_file_get_double(config, GENERAL_GROUP,
 			CONF_ONLINE_CHECK_CONNECT_TIMEOUT, &error);
 	if (!error) {
 		if (real < 0) {
@@ -680,7 +672,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckIPv4URL */
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 					CONF_ONLINE_CHECK_IPV4_URL, &error);
 	if (!error)
 		connman_settings.online_check_ipv4_url = string;
@@ -692,7 +684,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckIPv6URL */
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 					CONF_ONLINE_CHECK_IPV6_URL, &error);
 	if (!error)
 		connman_settings.online_check_ipv6_url = string;
@@ -704,14 +696,14 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheck{Initial,Max}Interval */
 
-	integer = g_key_file_get_integer(config, general_group_name,
+	integer = g_key_file_get_integer(config, GENERAL_GROUP,
 			CONF_ONLINE_CHECK_INITIAL_INTERVAL, &error);
 	if (!error && integer >= 0)
 		connman_settings.online_check_initial_interval = integer;
 
 	g_clear_error(&error);
 
-	integer = g_key_file_get_integer(config, general_group_name,
+	integer = g_key_file_get_integer(config, GENERAL_GROUP,
 			CONF_ONLINE_CHECK_MAX_INTERVAL, &error);
 	if (!error && integer >= 0)
 		connman_settings.online_check_max_interval = integer;
@@ -732,7 +724,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckFailuresThreshold */
 
-	integer = g_key_file_get_integer(config, general_group_name,
+	integer = g_key_file_get_integer(config, GENERAL_GROUP,
 			CONF_ONLINE_CHECK_FAILURES_THRESHOLD, &error);
 	if (!error && integer >= 0)
 		connman_settings.online_check_failures_threshold = integer;
@@ -748,7 +740,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckSuccessesThreshold */
 
-	integer = g_key_file_get_integer(config, general_group_name,
+	integer = g_key_file_get_integer(config, GENERAL_GROUP,
 			CONF_ONLINE_CHECK_SUCCESSES_THRESHOLD, &error);
 	if (!error && integer >= 0)
 		connman_settings.online_check_successes_threshold = integer;
@@ -764,7 +756,7 @@ static void parse_config(GKeyFile *config)
 
 	/* OnlineCheckIntervalStyle */
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 					CONF_ONLINE_CHECK_INTERVAL_STYLE, &error);
 	if (!error) {
 		if ((g_strcmp0(string, ONLINE_CHECK_INTERVAL_STYLE_FIBONACCI) == 0) ||
@@ -782,27 +774,28 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 				CONF_AUTO_CONNECT_ROAMING_SERVICES, &error);
 	if (!error)
 		connman_settings.auto_connect_roaming_services = boolean;
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name, CONF_ACD, &error);
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
+				CONF_ACD, &error);
 	if (!error)
 		connman_settings.acd = boolean;
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 				CONF_USE_GATEWAYS_AS_TIMESERVERS, &error);
 	if (!error)
 		connman_settings.use_gateways_as_timeservers = boolean;
 
 	g_clear_error(&error);
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 				CONF_LOCALTIME, &error);
 	if (!error)
 		connman_settings.localtime = string;
@@ -811,14 +804,14 @@ static void parse_config(GKeyFile *config)
 
 	g_clear_error(&error);
 
-	boolean = __connman_config_get_bool(config, general_group_name,
+	boolean = __connman_config_get_bool(config, GENERAL_GROUP,
 				CONF_REGDOM_FOLLOWS_TIMEZONE, &error);
 	if (!error)
 		connman_settings.regdom_follows_timezone = boolean;
 
 	g_clear_error(&error);
 
-	string = __connman_config_get_string(config, general_group_name,
+	string = __connman_config_get_string(config, GENERAL_GROUP,
 				CONF_RESOLV_CONF, &error);
 	if (!error)
 		connman_settings.resolv_conf = string;
