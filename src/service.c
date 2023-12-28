@@ -9481,7 +9481,7 @@ int __connman_service_ipconfig_indicate_state(struct connman_service *service,
 		 */
 		if (connman_service_is_default(service))
 			__connman_timeserver_sync(service,
-						CONNMAN_TIMESERVER_SYNC_REASON_STATE_UPDATE);
+				CONNMAN_TIMESERVER_SYNC_REASON_STATE_UPDATE);
 	}
 
 	return service_indicate_state(service);
