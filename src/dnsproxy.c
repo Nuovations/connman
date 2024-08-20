@@ -424,23 +424,23 @@ static size_t dns_name_length(const unsigned char *buf)
 	return strlen((const char *)buf) + 1;
 }
 
-static void update_cached_ttl(unsigned char *ptr, int len, int new_ttl)
+static void update_cached_ttl(unsigned char *ptr, size_t len, int new_ttl)
 {
 	size_t name_len;
 	const uint32_t raw_ttl = ntohl((uint32_t)new_ttl);
 
-	if (new_ttl < 0)
+	if (new_ttl < 0 || len < DNS_HEADER_SIZE + DNS_QUESTION_SIZE + 1)
 		return;
 
 	/* skip the header */
 	ptr += DNS_HEADER_SIZE;
 	len -= DNS_HEADER_SIZE;
 
-	if (len < (int)DNS_QUESTION_SIZE + 1)
-		return;
-
 	/* skip the query, which is a name and a struct domain_question */
 	name_len = dns_name_length(ptr);
+
+	if (len < name_len + DNS_QUESTION_SIZE)
+		return;
 
 	ptr += name_len + DNS_QUESTION_SIZE;
 	len -= name_len + DNS_QUESTION_SIZE;
@@ -453,13 +453,14 @@ static void update_cached_ttl(unsigned char *ptr, int len, int new_ttl)
 
 		/* first a name */
 		name_len = dns_name_length(ptr);
-		ptr += name_len;
-		len -= name_len;
-		if (len < 0)
+		if (len < name_len)
 			break;
 
+		ptr += name_len;
+		len -= name_len;
+
 		rr = (void*)ptr;
-		if (len < (int)sizeof(*rr))
+		if (len < sizeof(*rr))
 			/* incomplete record */
 			break;
 
@@ -468,6 +469,9 @@ static void update_cached_ttl(unsigned char *ptr, int len, int new_ttl)
 
 		/* skip to the next record */
 		rr_len = sizeof(*rr) + ntohs(rr->rdlen);
+		if (len < rr_len)
+			break;
+
 		ptr += rr_len;
 		len -= rr_len;
 	}
@@ -479,6 +483,7 @@ static void send_cached_response(int sk, const unsigned char *ptr, size_t len,
 {
 	struct domain_hdr *hdr = NULL;
 	int err;
+	size_t bytes_sent;
 	const size_t offset = protocol_offset(protocol);
 	/*
 	 * The cached packet contains always the TCP offset (two bytes)
@@ -507,10 +512,8 @@ static void send_cached_response(int sk, const unsigned char *ptr, size_t len,
 	/* if this is a negative reply, we are authoritative */
 	if (answers == 0)
 		hdr->aa = 1;
-	else {
-		const int adj_len = len - 2;
-		update_cached_ttl((unsigned char *)hdr, adj_len, ttl);
-	}
+	else
+		update_cached_ttl((unsigned char *)hdr, dns_len, ttl);
 
 	debug("sk %d id 0x%04x answers %d ptr %p length %zd dns %zd",
 		sk, hdr->id, answers, ptr, len, dns_len);
@@ -520,7 +523,9 @@ static void send_cached_response(int sk, const unsigned char *ptr, size_t len,
 		connman_error("Cannot send cached DNS response: %s",
 				strerror(errno));
 	}
-	else if (err != (int)len || dns_len != (len - offset))
+
+	bytes_sent = err;
+	if (bytes_sent != len || dns_len != (len - offset))
 		debug("Packet length mismatch, sent %d wanted %zd dns %zd",
 			err, len, dns_len);
 }
@@ -618,9 +623,10 @@ static gboolean request_timeout(gpointer user_data)
 		 * "not found" result), so send that back to client instead
 		 * of more fatal server failed error.
 		 */
-		sendto(sk, req->resp, req->resplen, MSG_NOSIGNAL,
-			sa, req->sa_len);
-
+		if (sendto(sk, req->resp, req->resplen, MSG_NOSIGNAL,
+				sa, req->sa_len) < 0)
+			connman_error("Failed to send response %d: %s",
+					sk, strerror(errno));
 	} else if (req->request) {
 		/*
 		 * There was not reply from server at all.
@@ -655,8 +661,8 @@ static int append_data(unsigned char *buf, size_t size, const char *data)
 	size_t len;
 
 	while (true) {
-		const char *dot = strchr(data, '.');
-		len = dot ? (size_t)((ptrdiff_t)(dot - data)) : strlen(data);
+		const char *dot = strchrnul(data, '.');
+		len = dot - data;
 
 		if (len == 0)
 			break;
@@ -1063,7 +1069,7 @@ static int parse_response(const unsigned char *buf, size_t buflen,
 	qlen = strlen(question);
 	ptr += qlen + 1; /* skip \0 */
 
-	if ((eptr - ptr) < (ptrdiff_t)DNS_QUESTION_SIZE)
+	if (ptr + DNS_QUESTION_SIZE >= eptr)
 		return -EINVAL;
 
 	q = (void *) ptr;
@@ -1871,7 +1877,7 @@ static const char* uncompress(int16_t field_count, const char *start, const char
 		} else if (dns_type == DNS_TYPE_A || dns_type == DNS_TYPE_AAAA) {
 			dlen = uptr[-2] << 8 | uptr[-1];
 
-			if ((ptr + dlen) > end || (uptr + dlen) > uncomp_end) {
+			if (dlen > (end - ptr) || dlen > (uncomp_end - uptr)) {
 				debug("data len %d too long", dlen);
 				return NULL;
 			}
@@ -2031,7 +2037,7 @@ static int dns_reply_fixup_domains(
 	const char *domain;
 
 	/* full header plus at least one byte for the hostname length */
-	if (reply_len < (size_t)header_len + 1)
+	if (reply_len < header_len + 1U)
 		return -EINVAL;
 
 	section_counts[0] = hdr->ancount;
@@ -2510,6 +2516,7 @@ hangup:
 
 		if (!reply) {
 			uint16_t reply_len;
+			size_t bytes_len;
 
 			bytes_recv = recv(sk, &reply_len, sizeof(reply_len), MSG_PEEK);
 			if (!bytes_recv) {
@@ -2521,7 +2528,10 @@ hangup:
 				connman_error("DNS proxy error %s",
 						strerror(errno));
 				goto hangup;
-			} else if (bytes_recv < (int)sizeof(reply_len))
+			}
+
+			bytes_len = bytes_recv;
+			if (bytes_len < sizeof(reply_len))
 				return TRUE;
 
 			/* the header contains the length of the message
@@ -3454,7 +3464,7 @@ static gboolean tcp_client_event(GIOChannel *channel, GIOCondition condition,
 	}
 
 	len = recvfrom(client_sk, client->buf + client->buf_end,
-			TCP_MAX_BUF_LEN - client->buf_end, 0,
+			TCP_MAX_BUF_LEN - client->buf_end - 1, 0,
 			client_addr, client_addr_len);
 	if (len < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -3466,6 +3476,8 @@ static gboolean tcp_client_event(GIOChannel *channel, GIOCondition condition,
 					GINT_TO_POINTER(client_sk));
 		return FALSE;
 	}
+
+	client->buf[client->buf_end + len] = '\0';
 
 	return read_tcp_data(client, client_addr, *client_addr_len, len);
 }
@@ -3653,7 +3665,7 @@ static bool udp_listener_event(GIOChannel *channel, GIOCondition condition,
 				struct listener_data *ifdata, int family,
 				guint *listener_watch)
 {
-	unsigned char buf[768];
+	unsigned char buf[769];
 	char query[512];
 	struct request_data *req = NULL;
 	struct domain_hdr *hdr = NULL;
@@ -3682,9 +3694,11 @@ static bool udp_listener_event(GIOChannel *channel, GIOCondition condition,
 
 	memset(client_addr, 0, *client_addr_len);
 	sk = g_io_channel_unix_get_fd(channel);
-	len = recvfrom(sk, buf, sizeof(buf), 0, client_addr, client_addr_len);
+	len = recvfrom(sk, buf, sizeof(buf) - 1, 0, client_addr, client_addr_len);
 	if (len < 2)
 		return true;
+
+	buf[len] = '\0';
 
 	debug("Received %d bytes (id 0x%04x)", len, buf[0] | buf[1] << 8);
 
@@ -3838,7 +3852,12 @@ static GIOChannel *get_listener(int family, int protocol, int index)
 			return NULL;
 		}
 
-		fcntl(sk, F_SETFL, O_NONBLOCK);
+		if (fcntl(sk, F_SETFL, O_NONBLOCK) < 0) {
+			connman_error("Failed to set TCP listener socket to non-blocking %d/%s",
+				-errno, strerror(errno));
+			close(sk);
+			return NULL;
+		}
 	}
 
 	channel = g_io_channel_unix_new(sk);

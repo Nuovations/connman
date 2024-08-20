@@ -51,12 +51,12 @@ tools/wispr
 tools/dhcp-test
 tools/dhcp-server-test
 tools/addr-test
-tools/tap-test
 tools/web-test
 tools/wpad-test
 tools/resolv-test
 tools/polkit-test
 tools/iptables-test
+tools/ip6tables-test
 tools/iptables-unit
 tools/dnsproxy-test
 tools/supplicant-test
@@ -66,6 +66,7 @@ tools/stats-ringbuffer-dump
 tools/private-network-test
 tools/session-test
 tools/netlink-test
+tools/dnsproxy-standalone
 unit/test-ippool
 unit/test-nat
 unit/test-iptables
