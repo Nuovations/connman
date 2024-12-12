@@ -1118,6 +1118,44 @@ static char *parse_proxy(const char *proxy)
 	return proxy_server;
 }
 
+/**
+ *  @brief
+ *    Log a Wireless Internet Service Provider roaming (WISPr) proxy
+ *    auto-configuration (PAC)-related online reachability check
+ *    failure.
+ *
+ *  @param[in]  wp_context  A pointer to the immutable WISPr/portal
+ *                          context for which to log the proxy
+ *                          auto-configuration (PAC)-related online
+ *                          reachability check failure.
+ *  @param[in]  reason      A pointer to an immutable, null-terminated
+ *                          C string containing the reason for the
+ *                          proxy auto-configuration (PAC)-related
+ *                          online reachability check failure which
+ *                          will be included at the start of the log
+ *                          message.
+ *
+ *  @private
+ *
+ */
+static void wispr_log_proxy_failure(
+		struct connman_wispr_portal_context const *wp_context,
+		const char *reason)
+{
+	g_autofree char *interface = NULL;
+
+	interface = connman_service_get_interface(wp_context->service);
+
+	connman_error("%s with proxy auto-configuration (PAC) URL %s "
+			"for %s [ %s ] online check URL %s",
+			reason,
+			connman_service_get_proxy_url(wp_context->service),
+			interface,
+			__connman_service_type2string(
+				connman_service_get_type(wp_context->service)),
+			wp_context->status_url);
+}
+
 static void proxy_callback(const char *proxy, void *user_data)
 {
 	struct connman_wispr_portal_context *wp_context = user_data;
@@ -1129,7 +1167,7 @@ static void proxy_callback(const char *proxy, void *user_data)
 		return;
 
 	if (!proxy) {
-		DBG("no valid proxy");
+		wispr_log_proxy_failure(wp_context, "No valid proxy");
 
 		wp_context->cb(wp_context->service,
 				wp_context->type,
@@ -1302,6 +1340,8 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context,
 						proxy_callback, wp_context);
 
 		if (wp_context->proxy_token == 0) {
+			wispr_log_proxy_failure(wp_context, "Failed to lookup");
+
 			err = -EINVAL;
 			wispr_portal_context_unref(wp_context);
 		}

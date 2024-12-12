@@ -233,6 +233,7 @@ static struct connman_ipconfig *create_ip4config(struct connman_service *service
 static struct connman_ipconfig *create_ip6config(struct connman_service *service,
 		int index);
 static void dns_changed(struct connman_service *service);
+static void proxy_changed(struct connman_service *service);
 static void vpn_auto_connect(void);
 static void trigger_autoconnect(struct connman_service *service);
 static void service_list_sort(const char *function);
@@ -555,6 +556,84 @@ int __connman_service_load_modifiable(struct connman_service *service)
 	return 0;
 }
 
+/**
+ *  @brief
+ *    Log the proxy auto-configuration (PAC) URL associated with the
+ *    specified service.
+ *
+ *  @param[in]  service  A pointer to the immutable network
+ *                       service for which to log the proxy
+ *                       auto-configuration (PAC) URL.
+ *  @param[in]  url      An optional pointer to the immutable null-
+ *                       terminated C string containing the proxy
+ *                       auto-configuration (PAC) URL.
+ *
+ *  @private
+ *
+ */
+static void service_log_pac(const struct connman_service *service,
+				const char *url)
+{
+	g_autofree char *interface = NULL;
+
+	interface = connman_service_get_interface(service);
+
+	connman_info("Interface %s [ %s ] proxy auto-configuration (PAC) URL %s.",
+				 interface,
+				 __connman_service_type2string(service->type),
+				 url ? url : "is not set");
+}
+
+/**
+ *  @brief
+ *    Set and log the proxy auto-configuration (PAC) URL for the
+ *    specified service.
+ *
+ *  If the specified service is a hidden service, no set or log
+ *  actions are taken.
+ *
+ *  @param[in,out]  service    A pointer to the mutable network
+ *                             service for which to set the proxy
+ *                             auto-configuration (PAC) URL.
+ *  @param[in]      url        An pointer to the immutable null-
+ *                             terminated C string containing the proxy
+ *                             auto-configuration (PAC) URL to set.
+ *  @param[in]      dochanged  A Boolean indicating whether or a D-Bus
+ *                             change notification should be sent for
+ *                             the service "Proxy" property.
+ *
+ *  @sa proxy_changed
+ *  @sa service_log_pac
+ *
+ *  @private
+ *
+ */
+static void service_set_pac(struct connman_service *service,
+				const char *pac,
+				bool dochanged)
+{
+	DBG("service %p (%s) pac %p (%s) dochanged %u",
+		service, connman_service_get_identifier(service),
+		pac,
+		pac ? pac : "<null>",
+		dochanged);
+
+	if (service->hidden)
+		return;
+
+	service_log_pac(service, pac);
+
+	g_free(service->pac);
+
+	if (pac && strlen(pac) > 0)
+		service->pac = g_strstrip(g_strdup(pac));
+	else
+		service->pac = NULL;
+
+	if (dochanged)
+		proxy_changed(service);
+}
+
 static int service_load(struct connman_service *service)
 {
 	GKeyFile *keyfile;
@@ -730,8 +809,7 @@ static int service_load(struct connman_service *service)
 	str = g_key_file_get_string(keyfile,
 				service->identifier, "Proxy.URL", NULL);
 	if (str) {
-		g_free(service->pac);
-		service->pac = str;
+		service_set_pac(service, str, false);
 	}
 
 	service->mdns_config = g_key_file_get_boolean(keyfile,
@@ -5492,6 +5570,72 @@ const char * const *connman_service_get_timeservers(const struct connman_service
 
 /**
  *  @brief
+ *    Set the proxy method for the specified service.
+ *
+ *  This attempts to set the proxy method for the specified
+ *  service. If the service is null or if the service is hidden, no
+ *  action is taken. If specified, a handler will be invoked, with the
+ *  specified context, after setting the proxy method.
+ *
+ *  If the handler is specified and it returns true, following, a
+ *  D-Bus change notification should be sent for the service "Proxy"
+ *  property and, if requested by @a donotifier, the proxy changed
+ *  notifier chain will be run.
+ *
+ *  @param[in,out]  service     A pointer to the mutable network
+ *                              service for which to set the proxy
+ *                              method.
+ *  @param[in]      method      The network service proxy method to set
+ *                              on @a service.
+ *  @param[in]      donotifier  A Boolean indicating whether the proxy
+ *                              changed notifier chain should be run
+ *                              after @a method is set on @a service.
+ *  @param[in]      handler     An optional pointer to a handler that,
+ *                              if specified, will be invoked after @a
+ *                              method is set on @a service.
+ *  @param[in]      context     An optional pointer to immutable context
+ *                              that will be passed to @a handler,
+ *                              along with @a service and @a method.
+ *
+ *  @sa __connman_notifier_proxy_changed
+ *  @sa proxy_changed
+ *
+ *  @private
+ *
+ */
+static void service_set_proxy_method(struct connman_service *service,
+			enum connman_service_proxy_method method,
+			bool donotifier,
+			bool (*handler)(struct connman_service *service,
+				enum connman_service_proxy_method method,
+				const void *context),
+			const void *context)
+{
+	DBG("service %p (%s) method %d (%s) donotifier %u "
+		"handler %p, context %p",
+		service, connman_service_get_identifier(service),
+		method, proxymethod2string(method),
+		donotifier,
+		handler,
+		context);
+
+	if (!service || service->hidden)
+		return;
+
+	service->proxy = method;
+
+	if (handler != NULL)
+		if (handler(service, method, context) != true)
+			return;
+
+	proxy_changed(service);
+
+	if (donotifier)
+		__connman_notifier_proxy_changed(service);
+}
+
+/**
+ *  @brief
  *    Set the web proxy method of the specified service.
  *
  *  This attempts to set the web proxy method of the specified service
@@ -5508,19 +5652,14 @@ const char * const *connman_service_get_timeservers(const struct connman_service
 void connman_service_set_proxy_method(struct connman_service *service,
 					enum connman_service_proxy_method method)
 {
-	DBG("service %p (%s) method %d (%s)",
-		service, connman_service_get_identifier(service),
-		method, proxymethod2string(method));
+	const bool donotifier = method != CONNMAN_SERVICE_PROXY_METHOD_AUTO;
+	void * const context = NULL;
 
-	if (!service || service->hidden)
-		return;
-
-	service->proxy = method;
-
-	proxy_changed(service);
-
-	if (method != CONNMAN_SERVICE_PROXY_METHOD_AUTO)
-		__connman_notifier_proxy_changed(service);
+	service_set_proxy_method(service,
+		method,
+		donotifier,
+		NULL,
+		context);
 }
 
 enum connman_service_proxy_method connman_service_get_proxy_method(
@@ -5558,28 +5697,94 @@ const char *connman_service_get_proxy_url(const struct connman_service *service)
 	return service->pac;
 }
 
-void __connman_service_set_proxy_autoconfig(struct connman_service *service,
-							const char *url)
+/**
+ *  @brief
+ *    A post-mutation handler for the service proxy method when the
+ *    method is #CONNMAN_SERVICE_PROXY_METHOD_AUTO.
+ *
+ *  @param[in,out]  service     A pointer to the mutable network
+ *                              service for which the proxy method was
+ *                              set.
+ *  @param[in]      method      The network service proxy method @a
+ *                              service was set to.
+ *  @param[in]      context     An pointer to immutable context
+ *                              that was passed, along with @a
+ *                              service, @a method, and this handler,
+ *                              to #service_set_proxy_method. For this
+ *                              handler, @a context is an optional
+ *                              null-terminated C string containing
+ *                              the service proxy auto-configuration
+ *                              (PAC) URL.
+ *
+ *  @returns
+ *    True if #service_set_proxy_method should continue with state
+ *    change notifications and processing proxy notifier changes after
+ *    the handler returns; otherwise, false.
+ *
+ *  @sa __connman_ipconfig_set_proxy_autoconfig
+ *  @sa service_set_proxy_method
+ *
+ *  @private
+ *
+ */
+static bool service_set_proxy_method_auto_handler(
+				struct connman_service *service,
+				enum connman_service_proxy_method method,
+				const void *context)
 {
-	if (!service || service->hidden)
-		return;
-
-	service->proxy = CONNMAN_SERVICE_PROXY_METHOD_AUTO;
+	const char * const url = context;
 
 	if (service->ipconfig_ipv4) {
 		if (__connman_ipconfig_set_proxy_autoconfig(
-			    service->ipconfig_ipv4, url) < 0)
-			return;
+				service->ipconfig_ipv4, url) < 0)
+			return false;
 	} else if (service->ipconfig_ipv6) {
 		if (__connman_ipconfig_set_proxy_autoconfig(
-			    service->ipconfig_ipv6, url) < 0)
-			return;
+				service->ipconfig_ipv6, url) < 0)
+			return false;
 	} else
-		return;
+		return false;
 
-	proxy_changed(service);
+	return true;
+}
 
-	__connman_notifier_proxy_changed(service);
+/**
+ *  @brief
+ *    Set the network service proxy method to # and proxy
+ *    auto-configuation (PAC) URL.
+ *
+ *  @param[in,out]  service  A pointer to the mutable network
+ *                           service for which to set the proxy
+ *                           method.
+ *  @param[in]  url          An optional pointer to the immutable
+ *                           null-terminated C string containing the
+ *                           proxy auto-configuration (PAC) URL.
+ *
+ *  @sa service_set_pac
+ *  @sa service_set_proxy_method
+ *  @sa service_set_proxy_method_auto_handler
+ *
+ */
+void __connman_service_set_proxy_autoconfig(struct connman_service *service,
+							const char *url)
+{
+	const bool dochanged = true;
+	const bool donotifier = true;
+	const void *context = url;
+
+	DBG("service %p (%s) url %p (%s)",
+		service,
+		connman_service_get_identifier(service),
+		url,
+		url ? url : "<null>");
+
+	service_set_pac(service, url, !dochanged);
+
+	service_set_proxy_method(service,
+		CONNMAN_SERVICE_PROXY_METHOD_AUTO,
+		donotifier,
+		service_set_proxy_method_auto_handler,
+		context);
 }
 
 const char *connman_service_get_proxy_autoconfig(struct connman_service *service)
@@ -5717,12 +5922,9 @@ void __connman_service_timeserver_changed(struct connman_service *service,
 void __connman_service_set_pac(struct connman_service *service,
 					const char *pac)
 {
-	if (service->hidden)
-		return;
-	g_free(service->pac);
-	service->pac = g_strdup(pac);
+	const bool dochanged = true;
 
-	proxy_changed(service);
+	service_set_pac(service, pac, dochanged);
 }
 
 void __connman_service_set_agent_identity(struct connman_service *service,
@@ -6009,12 +6211,7 @@ static int update_proxy_configuration(struct connman_service *service,
 
 		break;
 	case CONNMAN_SERVICE_PROXY_METHOD_AUTO:
-		g_free(service->pac);
-
-		if (url && strlen(url) > 0)
-			service->pac = g_strstrip(g_strdup(url));
-		else
-			service->pac = NULL;
+		service_set_pac(service, url, false);
 
 		/* if we are connected:
 		   - if service->pac == NULL
