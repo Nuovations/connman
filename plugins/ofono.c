@@ -167,6 +167,9 @@ struct modem_data {
 	DBusPendingCall *call_get_contexts;
 };
 
+static int cm_get_contexts(struct modem_data *modem);
+static int cm_get_properties(struct modem_data *modem);
+
 static const char *api2string(enum ofono_api api)
 {
 	switch (api) {
@@ -289,7 +292,7 @@ static void set_connected(struct modem_data *modem,
 	char *nameservers;
 	int index;
 
-	DBG("%s", modem->path);
+	DBG("modem %p path %s context %p path %s", modem, modem->path, context, context->path);
 
 	index = context->index;
 
@@ -300,9 +303,13 @@ static void set_connected(struct modem_data *modem,
 		return;
 	}
 
+	DBG("context->network %p", context->network);
+
 	service = connman_service_lookup_from_network(context->network);
 	if (!service)
 		return;
+
+	DBG("service %p", service);
 
 	connman_service_create_ip4config(service, index);
 	connman_network_set_ipv4_method(context->network, method);
@@ -1034,6 +1041,27 @@ static bool try_create_device(struct modem_data *modem)
 	modem->device = device;
 	connman_device_set_powered(modem->device, modem->online);
 
+	/*
+	 * The order in which the LTE and Connection Manager interfaces
+	 * arrive may not always be the same.
+	 *
+	 * If the latter arrived before the former and a modem device was
+	 * successfully created, this represents a secondary opportunity
+	 * to get Connection Manager properties and contexts, both
+	 * essential to successfully creating a Connection Manager
+	 * Cellular network and service.
+	 *
+	 * The primary opportunity would have been with api_added in
+	 * modem_update_interfaces; however, that would have been skipped
+	 * since the LTE interface did not yet exist in such a scenario
+	 * and this call would exit early due to the LTE_CAPABLE and
+	 * OFONO_API_LTE conditional checks above.
+	 */
+	if (has_interface(modem->interfaces, OFONO_API_CM)) {
+		cm_get_properties(modem);
+		cm_get_contexts(modem);
+	}
+
 	return true;
 }
 
@@ -1054,7 +1082,9 @@ static void add_network(struct modem_data *modem,
 {
 	const char *group;
 
-	DBG("%s", modem->path);
+	DBG("modem %p path %s context %p path %s network %p",
+		modem, modem->path,
+		context, context->path, context->network);
 
 	if (context->network)
 		return;
@@ -1183,12 +1213,15 @@ static int add_cm_context(struct modem_data *modem, const char *context_path,
 	struct network_context *context = NULL;
 	dbus_bool_t active = FALSE;
 	const char *ip_protocol = NULL;
+	int err = 0;
 
 	DBG("%s context path %s", modem->path, context_path);
 
 	context = network_context_alloc(context_path);
-	if (!context)
-		return -ENOMEM;
+	if (!context) {
+		err = -ENOMEM;
+		goto done;
+	}
 
 	while (dbus_message_iter_get_arg_type(dict) == DBUS_TYPE_DICT_ENTRY) {
 		DBusMessageIter entry, value;
@@ -1240,7 +1273,8 @@ static int add_cm_context(struct modem_data *modem, const char *context_path,
 
 	if (g_strcmp0(context_type, "internet") != 0) {
 		network_context_unref(context);
-		return -EINVAL;
+		err = -EINVAL;
+		goto done;
 	}
 
 	if (ip_protocol)
@@ -1255,7 +1289,10 @@ static int add_cm_context(struct modem_data *modem, const char *context_path,
 	    has_interface(modem->interfaces, OFONO_API_NETREG))
 		add_network(modem, context);
 
-	return 0;
+done:
+	DBG("err %d", err);
+
+	return err;
 }
 
 static void remove_cm_context(struct modem_data *modem,
@@ -1320,13 +1357,23 @@ static gboolean context_changed(DBusConnection *conn,
 
 	DBG("context_path %s", context_path);
 
+	/*
+	 * If there is no modem in the context hash for the associated
+	 * context path, then there is nothing to do at the moment as
+	 * the context must first be added before we can process changes
+	 * to it.
+	 */
 	modem = g_hash_table_lookup(context_hash, context_path);
 	if (!modem)
 		return TRUE;
 
+	DBG("modem %p", modem);
+
 	context = get_context_with_path(modem->context_list, context_path);
 	if (!context)
 		return TRUE;
+
+	DBG("context %p", context);
 
 	if (!dbus_message_iter_init(message, &iter))
 		return TRUE;
@@ -1399,6 +1446,8 @@ static gboolean context_changed(DBusConnection *conn,
 		const char *ip_protocol;
 
 		dbus_message_iter_get_basic(&value, &ip_protocol);
+
+		DBG("%s Protocol %s", modem->path, ip_protocol);
 
 		set_context_ipconfig(context, ip_protocol);
 	}
@@ -1553,7 +1602,12 @@ static gboolean cm_context_removed(DBusConnection *conn,
 	if (!modem)
 		return TRUE;
 
+	DBG("modem %p", modem);
+
 	context = get_context_with_path(modem->context_list, context_path);
+
+	DBG("context %p", context);
+
 	remove_cm_context(modem, context);
 
 	return TRUE;
@@ -1805,9 +1859,13 @@ static gboolean cm_changed(DBusConnection *conn, DBusMessage *message,
 	DBusMessageIter iter, value;
 	const char *key;
 
+	DBG("");
+
 	modem = g_hash_table_lookup(modem_hash, path);
 	if (!modem)
 		return TRUE;
+
+	DBG("modem %p modem->ignore %u", modem, modem->ignore);
 
 	if (modem->ignore)
 		return TRUE;
@@ -1882,6 +1940,8 @@ static gboolean sim_changed(DBusConnection *conn, DBusMessage *message,
 	if (!modem)
 		return TRUE;
 
+	DBG("modem %p modem->ignore %u", modem, modem->ignore);
+
 	if (modem->ignore)
 		return TRUE;
 
@@ -1892,6 +1952,8 @@ static gboolean sim_changed(DBusConnection *conn, DBusMessage *message,
 
 	dbus_message_iter_next(&iter);
 	dbus_message_iter_recurse(&iter, &value);
+
+	DBG("key %s", key);
 
 	if (g_str_equal(key, "SubscriberIdentity")) {
 		sim_update_imsi(modem, &value);
@@ -1976,9 +2038,10 @@ static void modem_update_interfaces(struct modem_data *modem,
 				uint8_t old_ifaces,
 				uint8_t new_ifaces)
 {
-	DBG("%s", modem->path);
+	DBG("modem %p path %s", modem, modem->path);
 
 	if (api_added(old_ifaces, new_ifaces, OFONO_API_SIM)) {
+		DBG("modem->imsi %p modem->set_powered %u", modem->imsi, modem->set_powered);
 		if (!modem->imsi &&
 				!modem->set_powered) {
 			/*
@@ -1990,6 +2053,7 @@ static void modem_update_interfaces(struct modem_data *modem,
 	}
 
 	if (api_added(old_ifaces, new_ifaces, OFONO_API_CM)) {
+		DBG("modem->device %p", modem->device);
 		if (modem->device) {
 			cm_get_properties(modem);
 			cm_get_contexts(modem);
