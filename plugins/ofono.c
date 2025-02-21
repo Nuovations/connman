@@ -292,7 +292,8 @@ static void set_connected(struct modem_data *modem,
 	char *nameservers;
 	int index;
 
-	DBG("modem %p path %s context %p path %s", modem, modem->path, context, context->path);
+	DBG("modem %p path %s context %p path %s",
+			modem, modem->path, context, context->path);
 
 	index = context->index;
 
@@ -2041,7 +2042,9 @@ static void modem_update_interfaces(struct modem_data *modem,
 	DBG("modem %p path %s", modem, modem->path);
 
 	if (api_added(old_ifaces, new_ifaces, OFONO_API_SIM)) {
-		DBG("modem->imsi %p modem->set_powered %u", modem->imsi, modem->set_powered);
+		DBG("modem->imsi %p modem->set_powered %u",
+				modem->imsi, modem->set_powered);
+
 		if (!modem->imsi &&
 				!modem->set_powered) {
 			/*
@@ -2054,6 +2057,7 @@ static void modem_update_interfaces(struct modem_data *modem,
 
 	if (api_added(old_ifaces, new_ifaces, OFONO_API_CM)) {
 		DBG("modem->device %p", modem->device);
+
 		if (modem->device) {
 			cm_get_properties(modem);
 			cm_get_contexts(modem);
