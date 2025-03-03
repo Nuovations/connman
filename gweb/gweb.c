@@ -56,6 +56,7 @@ enum chunk_state {
 };
 
 struct _GWebResult {
+	int err;
 	guint16 status;
 	const guint8 *buffer;
 	gsize length;
@@ -2461,6 +2462,14 @@ bool g_web_cancel_request(GWeb *web, guint id)
 		return false;
 
 	return true;
+}
+
+int g_web_result_get_err(const GWebResult *result)
+{
+	if (!result)
+		return -EINVAL;
+
+	return result->err;
 }
 
 guint16 g_web_result_get_status(GWebResult *result)
