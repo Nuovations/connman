@@ -1201,6 +1201,43 @@ static int map_gerror(const GError *error)
 	return err;
 }
 
+/**
+ *  @brief
+ *    Finalize a glib I/O channel watch received data delegation for a
+ *    web session request.
+ *
+ *  This finalizes a glib I/O channel received data failure or
+ *  success for @a session. This assumes that @a status is either
+ *  #G_IO_STATUS_ERROR or #G_IO_STATUS_EOF. #G_IO_STATUS_ERROR
+ *  represents an unconditional failure completion. #G_IO_STATUS_EOF
+ *  may represent a successful completion, if it follows one more
+ *  prior received data transfers for @a session. However, it
+ *  represents a failure completion if it occurs prior to the receipt
+ *  of any @a session data.
+ *
+ *  @param[in,out]  session          A pointer to the mutable web
+ *                                   session request to finalize.
+ *  @param[in]      status           The status from the prior call
+ *                                   to #g_io_channel_read_chars used
+ *                                   to determine how to finalize @a
+ *                                   session.
+ *  @param[in]      bytes_available  The number of bytes advertised
+ *                                   to the prior call to
+ *                                   #g_io_channel_read_chars.
+ *  @param[in]      bytes_read       The number of bytes read by the
+ *                                   prior call to
+ *                                   #g_io_channel_read_chars.
+ *  @param[in]      error            An optional pointer to the glib
+ *                                   error instance associated the
+ *                                   prior call to
+ *                                   #g_io_channel_read_chars.
+ *
+ *  @sa received_data_continue
+ *  @sa received_data
+ *
+ *  @private
+ *
+ */
 static void received_data_finalize(struct web_session *session,
 				GIOStatus status, gsize bytes_available,
 				gsize bytes_read, const GError *error)
@@ -1250,6 +1287,23 @@ static void received_data_finalize(struct web_session *session,
 	call_result_func(session, err, code);
 }
 
+/**
+ *  @brief
+ *    Continue a glib I/O channel watch received data delegation for a
+ *    web session request and process the data from it.
+ *
+ *  @param[in,out]  session     A pointer to the mutable web session
+ *                              request to continue and process
+ *                              received data for.
+ *  @param[in]      bytes_read  The number of bytes read by the prior
+ *                              call to #g_io_channel_read_chars.
+ *
+ *  @sa received_data_finalize
+ *  @sa received_data
+ *
+ *  @private
+ *
+ */
 static bool received_data_continue(struct web_session *session,
 				gsize bytes_read)
 {
