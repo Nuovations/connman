@@ -2527,6 +2527,21 @@ int g_web_result_get_err(const GWebResult *result)
 	return result->err;
 }
 
+/**
+ *  @brief
+ *    Returns the HTTP status code, if any, associated with the
+ *    web session request result.
+ *
+ *  @param[in]  result  A pointer to the immutable web session
+ *                      request result for which to return the
+ *                      HTTP status code.
+ *
+ *  @returns
+ *    The HTTP status code.
+ *
+ *  @sa g_web_result_get_err
+ *
+ */
 guint16 g_web_result_get_status(GWebResult *result)
 {
 	if (!result)
