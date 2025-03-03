@@ -56,6 +56,12 @@ enum chunk_state {
 };
 
 struct _GWebResult {
+	/**
+	 *	Operating system error, if any, associated with the request.
+	 *
+	 *	0 on success; otherwise, < 0 (negate to arrive at a POSIX
+	 *	domain error number).
+	 */
 	int err;
 	guint16 status;
 	const guint8 *buffer;
@@ -2464,6 +2470,22 @@ bool g_web_cancel_request(GWeb *web, guint id)
 	return true;
 }
 
+/**
+ *  @brief
+ *    Returns the operating system error, if any, associated with the
+ *    web session request result.
+ *
+ *  @param[in]  result  A pointer to the immutable web session
+ *                      request result for which to return the
+ *                      operating system error.
+ *
+ *  @returns
+ *    0 on success; otherwise, < 0 (negate to arrive at a POSIX
+ *    domain error number).
+ *
+ *  @sa g_web_result_get_status
+ *
+ */
 int g_web_result_get_err(const GWebResult *result)
 {
 	if (!result)
