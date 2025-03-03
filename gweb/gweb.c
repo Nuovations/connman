@@ -165,17 +165,21 @@ static void _debug(GWeb *web, const char *file, const char *caller,
 	va_end(ap);
 }
 
-static inline void call_result_func(struct web_session *session, guint16 status)
+static inline void call_result_func(struct web_session *session,
+					int err, guint16 status)
 {
+	debug(session->web, "session %p err %d status %d result_func %p",
+		session, err, status, session->result_func);
 
 	if (!session->result_func)
 		return;
+
+	session->result.err = err;
 
 	if (status != GWEB_HTTP_STATUS_CODE_UNKNOWN)
 		session->result.status = status;
 
 	session->result_func(&session->result, session->user_data);
-
 }
 
 static inline void call_route_func(struct web_session *session)
@@ -220,7 +224,7 @@ static gboolean connect_timeout_cb(gpointer user_data)
 	session->result.buffer = NULL;
 	session->result.length = 0;
 
-	call_result_func(session, GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT);
+	call_result_func(session, -ETIMEDOUT, GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT);
 
 	return G_SOURCE_REMOVE;
 }
@@ -961,7 +965,7 @@ static int decode_chunked(struct web_session *session,
 			if (session->chunk_left <= len) {
 				session->result.buffer = ptr;
 				session->result.length = session->chunk_left;
-				call_result_func(session,
+				call_result_func(session, 0,
 					GWEB_HTTP_STATUS_CODE_UNKNOWN);
 
 				len -= session->chunk_left;
@@ -977,7 +981,7 @@ static int decode_chunked(struct web_session *session,
 			/* more data */
 			session->result.buffer = ptr;
 			session->result.length = len;
-			call_result_func(session,
+			call_result_func(session, 0,
 				GWEB_HTTP_STATUS_CODE_UNKNOWN);
 
 			session->chunk_left -= len;
@@ -1003,7 +1007,7 @@ static int handle_body(struct web_session *session,
 		if (len > 0) {
 			session->result.buffer = buf;
 			session->result.length = len;
-			call_result_func(session,
+			call_result_func(session, 0,
 				GWEB_HTTP_STATUS_CODE_UNKNOWN);
 		}
 		return 0;
@@ -1015,7 +1019,7 @@ static int handle_body(struct web_session *session,
 
 		session->result.buffer = NULL;
 		session->result.length = 0;
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
 	}
 
 	return err;
@@ -1108,7 +1112,7 @@ static void received_data_finalize(struct web_session *session)
 	session->result.buffer = NULL;
 	session->result.length = 0;
 
-	call_result_func(session, code);
+	call_result_func(session, 0, code);
 }
 
 static bool received_data_continue(struct web_session *session,
@@ -1224,7 +1228,7 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 		session->result.buffer = NULL;
 		session->result.length = 0;
 
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		call_result_func(session, -EIO, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
 
 		return FALSE;
 	}
@@ -2258,14 +2262,14 @@ static void handle_resolved_address(struct web_session *session)
 	ret = getaddrinfo(session->address, port, &hints, &session->addr);
 	g_free(port);
 	if (ret != 0 || !session->addr) {
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
 		return;
 	}
 
 	call_route_func(session);
 
 	if (create_transport(session) < 0) {
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_CONFLICT);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_CONFLICT);
 		return;
 	}
 }
@@ -2286,7 +2290,7 @@ static void resolv_result(GResolvResultStatus status,
 	struct web_session *session = user_data;
 
 	if (!results || !results[0]) {
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_NOT_FOUND);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_NOT_FOUND);
 		return;
 	}
 
@@ -2348,6 +2352,7 @@ static guint do_request(GWeb *web, const char *url,
 	debug(web, "host %s", session->host);
 	debug(web, "flags %lu", session->flags);
 	debug(web, "request %s", session->request);
+	debug(web, "result_func %p", func);
 
 	if (type) {
 		session->content_type = g_strdup(type);
