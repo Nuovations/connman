@@ -1131,8 +1131,67 @@ static void add_header_field(struct web_session *session)
 	}
 }
 
-static void received_data_finalize(struct web_session *session)
+static int map_gerror(const GError *error)
 {
+	int err;
+
+	if (error->domain == G_CONVERT_ERROR) {
+		switch (error->code) {
+		case G_CONVERT_ERROR_NO_MEMORY:
+			err = -ENOMEM;
+			break;
+		case G_CONVERT_ERROR_ILLEGAL_SEQUENCE:
+			err = -EILSEQ;
+			break;
+		case G_CONVERT_ERROR_PARTIAL_INPUT:
+			err = -EBADMSG;
+			break;
+		default:
+			err = -EIO;
+			break;
+		}
+	} else if (error->domain == G_IO_CHANNEL_ERROR) {
+		switch (error->code) {
+		case G_IO_CHANNEL_ERROR_INVAL:
+			err = -EINVAL;
+			break;
+		case G_IO_CHANNEL_ERROR_FBIG:
+			err = -EFBIG;
+			break;
+		case G_IO_CHANNEL_ERROR_IO:
+			err = -EIO;
+			break;
+		case G_IO_CHANNEL_ERROR_ISDIR:
+			err = -EISDIR;
+			break;
+		case G_IO_CHANNEL_ERROR_NOSPC:
+			err = -ENOSPC;
+			break;
+		case G_IO_CHANNEL_ERROR_NXIO:
+			err = -ENXIO;
+			break;
+		case G_IO_CHANNEL_ERROR_OVERFLOW:
+			err = -EOVERFLOW;
+			break;
+		case G_IO_CHANNEL_ERROR_PIPE:
+			err = -EPIPE;
+			break;
+		default:
+			err = -EIO;
+			break;
+		}
+	} else {
+		err = -EIO;
+	}
+
+	return err;
+}
+
+static void received_data_finalize(struct web_session *session,
+				GIOStatus status, gsize bytes_available,
+				gsize bytes_read, const GError *error)
+{
+	int err = 0;
 	const guint16 code = GWEB_HTTP_STATUS_CODE_UNKNOWN;
 
 	session->transport_watch = 0;
@@ -1140,7 +1199,41 @@ static void received_data_finalize(struct web_session *session)
 	session->result.buffer = NULL;
 	session->result.length = 0;
 
-	call_result_func(session, 0, code);
+	/* Handle post-channel read errors, which could be either
+	 * G_IO_STATUS_ERROR or G_IO_STATUS_EOF.
+	 *
+	 * For G_IO_STATUS_ERROR, simply attempt to map the error from
+	 * GError, if available.
+	 *
+	 * For G_IO_STATUS_EOF, this could occur at the end of a nominal,
+	 * successful get. That is, some number of headers, with or
+	 * without a body, termiated by an expected end-of-file (EOF)
+	 * condition. However, G_IO_STATUS_EOF can also happen as a result
+	 * of the remote peer server unexpectedly terminating the
+	 * connection without transferring any data at all. The only
+	 * reasonable recovery for this case it to fail the request,
+	 * synthesizing -ECONNRESET as the error, and to let the client
+	 * request again.
+	 *
+	 * If we asked for a non-zero amount of data but received none and
+	 * have accumulated no headers thus far, then we assume that the
+	 * remote peer server unexpectedly closed the connection;
+	 * otherwise, we assume it is a normal EOF closure.
+	 */
+
+	if (status == G_IO_STATUS_ERROR) {
+		if (error != NULL)
+			err = map_gerror(error);
+		else
+			err = -EIO;
+	} else if (status == G_IO_STATUS_EOF) {
+		if (bytes_available > 0 &&
+				bytes_read == 0 &&
+				!g_web_result_has_headers(&session->result, NULL))
+			err = -ECONNRESET;
+	}
+
+	call_result_func(session, err, code);
 }
 
 static bool received_data_continue(struct web_session *session,
@@ -1261,8 +1354,10 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 							gpointer user_data)
 {
 	struct web_session *session = user_data;
+	const gsize bytes_available = session->receive_space - 1;
 	gsize bytes_read;
 	GIOStatus status;
+	GError *error = NULL;
 
 	/* We received some data or condition, cancel the connect timeout. */
 
@@ -1278,7 +1373,7 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 		session->result.buffer = NULL;
 		session->result.length = 0;
 
-		call_result_func(session, -EIO, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		call_result_func(session, -EIO, GWEB_HTTP_STATUS_CODE_UNKNOWN);
 
 		return FALSE;
 	}
@@ -1287,16 +1382,20 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 
 	status = g_io_channel_read_chars(channel,
 				(gchar *) session->receive_buffer,
-				session->receive_space - 1, &bytes_read, NULL);
+				bytes_available, &bytes_read, &error);
 
-	debug(session->web, "bytes read %zu status %d", bytes_read,
-		status);
+	debug(session->web, "bytes read %zu status %d error %p", bytes_read,
+		status, error);
 
 	/* Handle post-channel read errors, which could be either
 	 * G_IO_STATUS_ERROR or G_IO_STATUS_EOF.
 	 */
 	if (status != G_IO_STATUS_NORMAL && status != G_IO_STATUS_AGAIN) {
-		received_data_finalize(session);
+		received_data_finalize(session, status,
+			bytes_available, bytes_read, error);
+
+		if (error != NULL)
+			g_clear_error(&error);
 
 		return FALSE;
 	}
