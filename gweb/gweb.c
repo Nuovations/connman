@@ -1131,6 +1131,20 @@ static void add_header_field(struct web_session *session)
 	}
 }
 
+/**
+ *  @brief
+ *    Map a glib error into the negated POSIX error domain.
+ *
+ *  This attempts to map the specfied glib error into the negated
+ *  POSIX error domain, defaulting to -EIO for unmapped domain/code
+ *  pairs.
+ *
+ *  @param[in]  error  A pointer to the immutable glib error to map.
+ *
+ *  @returns
+ *    A mapped glib error into the negated POSIX error domain.
+ *
+ */
 static int map_gerror(const GError *error)
 {
 	int err;
