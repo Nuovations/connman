@@ -162,10 +162,13 @@ guint g_web_request_post_file(GWeb *web, const char *url,
 
 bool g_web_cancel_request(GWeb *web, guint id);
 
+int g_web_result_get_err(const GWebResult *result);
 guint16 g_web_result_get_status(GWebResult *result);
 
 bool g_web_result_get_header(GWebResult *result,
 				const char *header, const char **value);
+bool g_web_result_has_headers(const GWebResult *result,
+				guint *count);
 bool g_web_result_get_chunk(GWebResult *result,
 				const guint8 **chunk, gsize *length);
 

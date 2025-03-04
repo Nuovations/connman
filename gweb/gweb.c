@@ -55,12 +55,52 @@ enum chunk_state {
 	CHUNK_DATA,
 };
 
+/**
+ *	The opaque structure presented to GWeb clients on received data or
+ *	request closures.
+ *
+ *  @private
+ */
 struct _GWebResult {
+	/**
+	 *	Operating system error, if any, associated with the request.
+	 *
+	 *	0 on success; otherwise, < 0 (negate to arrive at a POSIX
+	 *	domain error number).
+	 */
+	int err;
+
+	/**
+	 *	HTTP status code on success.
+	 */
 	guint16 status;
+
+	/**
+	 *	HTTP body content on success; otherwise, NULL.
+	 */
 	const guint8 *buffer;
+
+	/**
+	 *	HTTP body length on success; otherwise, 0.
+	 */
 	gsize length;
+
+	/**
+	 *	Boolean indicating whether the HTTP response uses HTTP/1.1
+	 *	chunked transfer encoding.
+	 */
 	bool use_chunk;
+
+	/**
+	 *	An optional pointer to a null-terminated C string containing
+	 *	the last HTTP header name added as part of a header key/value
+	 *	pair.
+	 */
 	gchar *last_key;
+
+	/**
+	 *	HTTP headers, on success, keyed by the header name.
+	 */
 	GHashTable *headers;
 };
 
@@ -158,17 +198,49 @@ static void _debug(GWeb *web, const char *file, const char *caller,
 	va_end(ap);
 }
 
-static inline void call_result_func(struct web_session *session, guint16 status)
+/**
+ *  @brief
+ *    Invoke the closure callback associated with the web session
+ *    request.
+ *
+ *  This closes the specified web session request by invoking the @a
+ *  result_func originally assigned in #do_request when the session
+ *  was first initiated.
+ *
+ *  @param[in]  session
+ *    A pointer to the mutable web session request for which to invoke
+ *    the closure callback.
+ *
+ *  @param[in]  err
+ *    Operating system error to set in the @a session result
+ *    structure.
+ *
+ *  @param[in]  status
+ *    HTTP status code on success to set in the @a session result
+ *    structure. Note that #GWEB_HTTP_STATUS_CODE_UNKNOWN acts as a
+ *    null value such that the status is only set if the value is
+ *    not #GWEB_HTTP_STATUS_CODE_UNKNOWN.
+ *
+ *  @sa do_request
+ *
+ *  @private
+ *
+ */
+static inline void call_result_func(struct web_session *session,
+					int err, guint16 status)
 {
+	debug(session->web, "session %p err %d status %d result_func %p",
+		session, err, status, session->result_func);
 
 	if (!session->result_func)
 		return;
+
+	session->result.err = err;
 
 	if (status != GWEB_HTTP_STATUS_CODE_UNKNOWN)
 		session->result.status = status;
 
 	session->result_func(&session->result, session->user_data);
-
 }
 
 static inline void call_route_func(struct web_session *session)
@@ -213,7 +285,7 @@ static gboolean connect_timeout_cb(gpointer user_data)
 	session->result.buffer = NULL;
 	session->result.length = 0;
 
-	call_result_func(session, GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT);
+	call_result_func(session, -ETIMEDOUT, GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT);
 
 	return G_SOURCE_REMOVE;
 }
@@ -954,7 +1026,7 @@ static int decode_chunked(struct web_session *session,
 			if (session->chunk_left <= len) {
 				session->result.buffer = ptr;
 				session->result.length = session->chunk_left;
-				call_result_func(session,
+				call_result_func(session, 0,
 					GWEB_HTTP_STATUS_CODE_UNKNOWN);
 
 				len -= session->chunk_left;
@@ -970,7 +1042,7 @@ static int decode_chunked(struct web_session *session,
 			/* more data */
 			session->result.buffer = ptr;
 			session->result.length = len;
-			call_result_func(session,
+			call_result_func(session, 0,
 				GWEB_HTTP_STATUS_CODE_UNKNOWN);
 
 			session->chunk_left -= len;
@@ -996,7 +1068,7 @@ static int handle_body(struct web_session *session,
 		if (len > 0) {
 			session->result.buffer = buf;
 			session->result.length = len;
-			call_result_func(session,
+			call_result_func(session, 0,
 				GWEB_HTTP_STATUS_CODE_UNKNOWN);
 		}
 		return 0;
@@ -1008,7 +1080,7 @@ static int handle_body(struct web_session *session,
 
 		session->result.buffer = NULL;
 		session->result.length = 0;
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
 	}
 
 	return err;
@@ -1092,37 +1164,183 @@ static void add_header_field(struct web_session *session)
 	}
 }
 
-static gboolean received_data(GIOChannel *channel, GIOCondition cond,
-							gpointer user_data)
+/**
+ *  @brief
+ *    Map a glib error into the negated POSIX error domain.
+ *
+ *  This attempts to map the specfied glib error into the negated
+ *  POSIX error domain, defaulting to -EIO for unmapped domain/code
+ *  pairs.
+ *
+ *  @param[in]  error  A pointer to the immutable glib error to map.
+ *
+ *  @returns
+ *    A mapped glib error into the negated POSIX error domain.
+ *
+ */
+static int map_gerror(const GError *error)
 {
-	struct web_session *session = user_data;
+	int err;
+
+	if (error->domain == G_CONVERT_ERROR) {
+		switch (error->code) {
+		case G_CONVERT_ERROR_NO_MEMORY:
+			err = -ENOMEM;
+			break;
+		case G_CONVERT_ERROR_ILLEGAL_SEQUENCE:
+			err = -EILSEQ;
+			break;
+		case G_CONVERT_ERROR_PARTIAL_INPUT:
+			err = -EBADMSG;
+			break;
+		default:
+			err = -EIO;
+			break;
+		}
+	} else if (error->domain == G_IO_CHANNEL_ERROR) {
+		switch (error->code) {
+		case G_IO_CHANNEL_ERROR_INVAL:
+			err = -EINVAL;
+			break;
+		case G_IO_CHANNEL_ERROR_FBIG:
+			err = -EFBIG;
+			break;
+		case G_IO_CHANNEL_ERROR_IO:
+			err = -EIO;
+			break;
+		case G_IO_CHANNEL_ERROR_ISDIR:
+			err = -EISDIR;
+			break;
+		case G_IO_CHANNEL_ERROR_NOSPC:
+			err = -ENOSPC;
+			break;
+		case G_IO_CHANNEL_ERROR_NXIO:
+			err = -ENXIO;
+			break;
+		case G_IO_CHANNEL_ERROR_OVERFLOW:
+			err = -EOVERFLOW;
+			break;
+		case G_IO_CHANNEL_ERROR_PIPE:
+			err = -EPIPE;
+			break;
+		default:
+			err = -EIO;
+			break;
+		}
+	} else {
+		err = -EIO;
+	}
+
+	return err;
+}
+
+/**
+ *  @brief
+ *    Finalize a glib I/O channel watch received data delegation for a
+ *    web session request.
+ *
+ *  This finalizes a glib I/O channel received data failure or
+ *  success for @a session. This assumes that @a status is either
+ *  #G_IO_STATUS_ERROR or #G_IO_STATUS_EOF. #G_IO_STATUS_ERROR
+ *  represents an unconditional failure completion. #G_IO_STATUS_EOF
+ *  may represent a successful completion, if it follows one more
+ *  prior received data transfers for @a session. However, it
+ *  represents a failure completion if it occurs prior to the receipt
+ *  of any @a session data.
+ *
+ *  @param[in,out]  session          A pointer to the mutable web
+ *                                   session request to finalize.
+ *  @param[in]      status           The status from the prior call
+ *                                   to #g_io_channel_read_chars used
+ *                                   to determine how to finalize @a
+ *                                   session.
+ *  @param[in]      bytes_available  The number of bytes advertised
+ *                                   to the prior call to
+ *                                   #g_io_channel_read_chars.
+ *  @param[in]      bytes_read       The number of bytes read by the
+ *                                   prior call to
+ *                                   #g_io_channel_read_chars.
+ *  @param[in]      error            An optional pointer to the glib
+ *                                   error instance associated the
+ *                                   prior call to
+ *                                   #g_io_channel_read_chars.
+ *
+ *  @sa received_data_continue
+ *  @sa received_data
+ *
+ *  @private
+ *
+ */
+static void received_data_finalize(struct web_session *session,
+				GIOStatus status, gsize bytes_available,
+				gsize bytes_read, const GError *error)
+{
+	int err = 0;
+	const guint16 code = GWEB_HTTP_STATUS_CODE_UNKNOWN;
+
+	session->transport_watch = 0;
+
+	session->result.buffer = NULL;
+	session->result.length = 0;
+
+	/* Handle post-channel read errors, which could be either
+	 * G_IO_STATUS_ERROR or G_IO_STATUS_EOF.
+	 *
+	 * For G_IO_STATUS_ERROR, simply attempt to map the error from
+	 * GError, if available.
+	 *
+	 * For G_IO_STATUS_EOF, this could occur at the end of a nominal,
+	 * successful get. That is, some number of headers, with or
+	 * without a body, termiated by an expected end-of-file (EOF)
+	 * condition. However, G_IO_STATUS_EOF can also happen as a result
+	 * of the remote peer server unexpectedly terminating the
+	 * connection without transferring any data at all. The only
+	 * reasonable recovery for this case it to fail the request,
+	 * synthesizing -ECONNRESET as the error, and to let the client
+	 * request again.
+	 *
+	 * If we asked for a non-zero amount of data but received none and
+	 * have accumulated no headers thus far, then we assume that the
+	 * remote peer server unexpectedly closed the connection;
+	 * otherwise, we assume it is a normal EOF closure.
+	 */
+
+	if (status == G_IO_STATUS_ERROR) {
+		if (error != NULL)
+			err = map_gerror(error);
+		else
+			err = -EIO;
+	} else if (status == G_IO_STATUS_EOF) {
+		if (bytes_available > 0 &&
+				bytes_read == 0 &&
+				!g_web_result_has_headers(&session->result, NULL))
+			err = -ECONNRESET;
+	}
+
+	call_result_func(session, err, code);
+}
+
+/**
+ *  @brief
+ *    Continue a glib I/O channel watch received data delegation for a
+ *    web session request and process the data from it.
+ *
+ *  @param[in,out]  session     A pointer to the mutable web session
+ *                              request to continue and process
+ *                              received data for.
+ *  @param[in]      bytes_read  The number of bytes read by the prior
+ *                              call to #g_io_channel_read_chars.
+ *
+ *  @sa received_data_finalize
+ *  @sa received_data
+ *
+ *  @private
+ *
+ */
+static bool received_data_continue(struct web_session *session,
+				gsize bytes_read)
+{
 	guint8 *ptr = session->receive_buffer;
-	gsize bytes_read;
-	GIOStatus status;
-
-	cancel_connect_timeout(session);
-
-	if (cond & (G_IO_NVAL | G_IO_ERR | G_IO_HUP)) {
-		session->transport_watch = 0;
-		session->result.buffer = NULL;
-		session->result.length = 0;
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
-		return FALSE;
-	}
-
-	status = g_io_channel_read_chars(channel,
-				(gchar *) session->receive_buffer,
-				session->receive_space - 1, &bytes_read, NULL);
-
-	debug(session->web, "bytes read %zu", bytes_read);
-
-	if (status != G_IO_STATUS_NORMAL && status != G_IO_STATUS_AGAIN) {
-		session->transport_watch = 0;
-		session->result.buffer = NULL;
-		session->result.length = 0;
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_UNKNOWN);
-		return FALSE;
-	}
 
 	session->receive_buffer[bytes_read] = '\0';
 
@@ -1190,7 +1408,7 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 
 		str = session->current_header->str;
 
-		if (session->result.status == 0) {
+		if (session->result.status == GWEB_HTTP_STATUS_CODE_UNKNOWN) {
 			unsigned int code;
 
 			if (sscanf(str, "HTTP/%*s %u %*s", &code) == 1)
@@ -1209,6 +1427,85 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 	}
 
 	return TRUE;
+}
+
+/**
+ *  @brief
+ *    Handle a glib I/O channel watch received data delegation for a
+ *    web session request.
+ *
+ *  This handles a glib I/O channel received data delegate for the web
+ *  session request associated with @a channel.
+ *
+ *  @param[in,out]  channel    A pointer to the glib channel that
+ *                             received data or a condition(s)/
+ *                             event(s).
+ *  @param[in]      cond       The conditions or events that
+ *                             generated this delegation.
+ *  @param[in,out]  user_data  A pointer to the mutable web session
+ *                             request associated with @a channel.
+ *
+ *  @sa received_data_finalize
+ *  @sa received_data_continue
+ *
+ *  @private
+ *
+ */
+static gboolean received_data(GIOChannel *channel, GIOCondition cond,
+							gpointer user_data)
+{
+	struct web_session *session = user_data;
+	const gsize bytes_available = session->receive_space - 1;
+	gsize bytes_read;
+	GIOStatus status;
+	GError *error = NULL;
+
+	/* We received some data or condition, cancel the connect timeout. */
+
+	cancel_connect_timeout(session);
+
+	/* If there was a low-level I/O condition or error, there is
+	 * nothing more to do; simply fail the request.
+	 */
+
+	if (cond & (G_IO_NVAL | G_IO_ERR | G_IO_HUP)) {
+		session->transport_watch = 0;
+
+		session->result.buffer = NULL;
+		session->result.length = 0;
+
+		call_result_func(session, -EIO, GWEB_HTTP_STATUS_CODE_UNKNOWN);
+
+		return FALSE;
+	}
+
+	/* Attempt to read received data from the channel. */
+
+	status = g_io_channel_read_chars(channel,
+				(gchar *) session->receive_buffer,
+				bytes_available, &bytes_read, &error);
+
+	debug(session->web, "bytes read %zu status %d error %p", bytes_read,
+		status, error);
+
+	/* Handle post-channel read errors, which could be either
+	 * G_IO_STATUS_ERROR or G_IO_STATUS_EOF.
+	 */
+	if (status != G_IO_STATUS_NORMAL && status != G_IO_STATUS_AGAIN) {
+		received_data_finalize(session, status,
+			bytes_available, bytes_read, error);
+
+		if (error != NULL)
+			g_clear_error(&error);
+
+		return FALSE;
+	}
+
+	/* Otherwise, continue the session request and process the
+	 * received data.
+	 */
+
+	return received_data_continue(session, bytes_read);
 }
 
 static int bind_to_address(int sk, const char *interface, int family)
@@ -2215,14 +2512,14 @@ static void handle_resolved_address(struct web_session *session)
 	ret = getaddrinfo(session->address, port, &hints, &session->addr);
 	g_free(port);
 	if (ret != 0 || !session->addr) {
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
 		return;
 	}
 
 	call_route_func(session);
 
 	if (create_transport(session) < 0) {
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_CONFLICT);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_CONFLICT);
 		return;
 	}
 }
@@ -2243,7 +2540,7 @@ static void resolv_result(GResolvResultStatus status,
 	struct web_session *session = user_data;
 
 	if (!results || !results[0]) {
-		call_result_func(session, GWEB_HTTP_STATUS_CODE_NOT_FOUND);
+		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_NOT_FOUND);
 		return;
 	}
 
@@ -2305,6 +2602,7 @@ static guint do_request(GWeb *web, const char *url,
 	debug(web, "host %s", session->host);
 	debug(web, "flags %lu", session->flags);
 	debug(web, "request %s", session->request);
+	debug(web, "result_func %p", func);
 
 	if (type) {
 		session->content_type = g_strdup(type);
@@ -2427,10 +2725,49 @@ bool g_web_cancel_request(GWeb *web, guint id)
 	return true;
 }
 
+/**
+ *  @brief
+ *    Returns the operating system error, if any, associated with the
+ *    web session request result.
+ *
+ *  @param[in]  result  A pointer to the immutable web session
+ *                      request result for which to return the
+ *                      operating system error.
+ *
+ *  @returns
+ *    0 on success; otherwise, < 0 (negate to arrive at a POSIX
+ *    domain error number).
+ *
+ *  @sa g_web_result_get_status
+ *
+ */
+int g_web_result_get_err(const GWebResult *result)
+{
+	if (!result)
+		return -EINVAL;
+
+	return result->err;
+}
+
+/**
+ *  @brief
+ *    Returns the HTTP status code, if any, associated with the
+ *    web session request result.
+ *
+ *  @param[in]  result  A pointer to the immutable web session
+ *                      request result for which to return the
+ *                      HTTP status code.
+ *
+ *  @returns
+ *    The HTTP status code.
+ *
+ *  @sa g_web_result_get_err
+ *
+ */
 guint16 g_web_result_get_status(GWebResult *result)
 {
 	if (!result)
-		return 0;
+		return GWEB_HTTP_STATUS_CODE_UNKNOWN;
 
 	return result->status;
 }
@@ -2467,6 +2804,41 @@ bool g_web_result_get_header(GWebResult *result,
 		return false;
 
 	return true;
+}
+
+/**
+ *  @brief
+ *    Return whether the web session request result has any HTTP
+ *    headers.
+ *
+ *  @param[in]  result  A pointer to the immutable web session
+ *                      request result for which to determine if there
+ *                      are any HTTP headers.
+ *  @param[out]  count  An optional pointer to mutable storage for the
+ *                      number of HTTP headers associated with @a
+ *                      result.
+ *
+ *  @returns
+ *    True if there are one or more HTTP headers associated with @a
+ *    result; otherwise, false.
+ *
+ *  @sa g_web_result_get_header
+ *
+ */
+bool g_web_result_has_headers(const GWebResult *result,
+				guint *count)
+{
+	guint size;
+
+	if (!result)
+		return false;
+
+	size = g_hash_table_size(result->headers);
+
+	if (count)
+		*count = size;
+
+	return size > 0;
 }
 
 struct _GWebParser {
