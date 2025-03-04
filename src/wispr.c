@@ -782,6 +782,8 @@ static void wispr_portal_request_portal(
 					wispr_route_request,
 					wp_context, &err);
 
+	DBG("wp_context->request_id %d err %d", wp_context->request_id, err);
+
 	if (wp_context->request_id == 0) {
 		portal_manage_failure_status(wp_context, err);
 		wispr_portal_error(wp_context);
@@ -973,38 +975,26 @@ static bool wispr_manage_message(GWebResult *result,
 	return false;
 }
 
-static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
+static void wispr_portal_web_result_err(GWebResult *result,
+		struct connman_wispr_portal_context *wp_context,
+		int err)
 {
-	struct connman_wispr_portal_context *wp_context = user_data;
-	const char *redirect = NULL;
-	const guint8 *chunk = NULL;
-	const char *str = NULL;
+	portal_manage_failure_status(wp_context, err);
+
+	free_wispr_routes(wp_context);
+	wp_context->request_id = 0;
+}
+
+static void wispr_portal_web_result_no_err(GWebResult *result,
+		struct connman_wispr_portal_context *wp_context)
+{
 	guint16 status;
-	gsize length;
-
-	DBG("");
-
-	if (wp_context->wispr_result != CONNMAN_WISPR_RESULT_ONLINE) {
-		g_web_result_get_chunk(result, &chunk, &length);
-
-		if (length > 0) {
-			g_web_parser_feed_data(wp_context->wispr_parser,
-								chunk, length);
-			/* read more data */
-			return true;
-		}
-
-		g_web_parser_end_data(wp_context->wispr_parser);
-
-		if (wp_context->wispr_msg.message_type >= 0) {
-			if (wispr_manage_message(result, wp_context))
-				goto done;
-		}
-	}
+	const char *str = NULL;
+	const char *redirect = NULL;
 
 	status = g_web_result_get_status(result);
 
-	DBG("status: %03u", status);
+	connman_info("status: %03u", status);
 
 	switch (status) {
 	case GWEB_HTTP_STATUS_CODE_UNKNOWN:
@@ -1073,12 +1063,64 @@ static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
 				wispr_portal_browser_reply_cb,
 				wp_context->status_url, wp_context);
 		break;
+
 	default:
 		break;
 	}
 
 	free_wispr_routes(wp_context);
 	wp_context->request_id = 0;
+
+done:
+	return;
+}
+
+static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
+{
+	struct connman_wispr_portal_context *wp_context = user_data;
+	const guint8 *chunk = NULL;
+	int err;
+	gsize length;
+
+	DBG("result %p user_data %p wispr_result %d",
+		result, user_data, wp_context->wispr_result);
+
+	if (wp_context->wispr_result != CONNMAN_WISPR_RESULT_ONLINE) {
+		g_web_result_get_chunk(result, &chunk, &length);
+
+		DBG("length %zu", length);
+
+		if (length > 0) {
+			g_web_parser_feed_data(wp_context->wispr_parser,
+								chunk, length);
+			/* read more data */
+			return true;
+		}
+
+		g_web_parser_end_data(wp_context->wispr_parser);
+
+		DBG("wp_context->wispr_msg.message_type %d", wp_context->wispr_msg.message_type);
+
+		if (wp_context->wispr_msg.message_type >= 0) {
+			if (wispr_manage_message(result, wp_context))
+				goto done;
+		}
+	}
+
+	/* Check whether there was an operating system error while
+	 * processing the web request associated with the "online"
+	 * HTTP-based Internet reachability check.
+	 */
+
+	err = g_web_result_get_err(result);
+
+	DBG("err %d", err);
+
+	if (err < 0)
+		wispr_portal_web_result_err(result, wp_context, err);
+	else
+		wispr_portal_web_result_no_err(result, wp_context);
+
 done:
 	wp_context->wispr_msg.message_type = -1;
 
@@ -1088,6 +1130,7 @@ done:
 	 * maintaining a weak reference to it.
 	 */
 	wispr_portal_context_unref(wp_context);
+
 	return false;
 }
 
