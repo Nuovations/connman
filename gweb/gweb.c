@@ -165,6 +165,30 @@ static void _debug(GWeb *web, const char *file, const char *caller,
  */
 G_DEFINE_QUARK(g-web-error-quark, g_web_error)
 
+/**
+ *  @brief
+ *    Invoke the closure callback associated with the web session
+ *    request.
+ *
+ *  This closes the specified web session request by invoking the @a
+ *  result_func originally assigned in #do_request when the session
+ *  was first initiated.
+ *
+ *  @param[in]  session
+ *    A pointer to the mutable web session request for which to invoke
+ *    the closure callback.
+ *
+ *  @param[in]  status
+ *    HTTP status code on success to set in the @a session result
+ *    structure. Note that #GWEB_HTTP_STATUS_CODE_UNKNOWN acts as a
+ *    null value such that the status is only set if the value is
+ *    not #GWEB_HTTP_STATUS_CODE_UNKNOWN.
+ *
+ *  @sa do_request
+ *
+ *  @private
+ *
+ */
 static inline void call_result_func(struct web_session *session, guint16 status)
 {
 
