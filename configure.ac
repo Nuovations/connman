@@ -284,6 +284,11 @@ fi
 
 AC_DEFINE_UNQUOTED([STATS_MAX_FILE_SIZE], (${stats_max_file_size}), [Maximal size of a statistics round robin file])
 
+PKG_CHECK_MODULES(GIO, gio-2.0 >= 2.44, dummy=yes,
+				AC_MSG_ERROR(GIo >= 2.44 is required))
+AC_SUBST(GIO_CFLAGS)
+AC_SUBST(GIO_LIBS)
+
 PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.44, dummy=yes,
 				AC_MSG_ERROR(GLib >= 2.44 is required))
 AC_SUBST(GLIB_CFLAGS)
