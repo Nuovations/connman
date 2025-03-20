@@ -101,6 +101,22 @@ enum GWebStatusCode {
 	GWEB_HTTP_STATUS_CODE_NETWORK_AUTHENTICATION_REQUIRED = 511
 };
 
+/**
+ *  GWeb-specific error enumerations potentially set when
+ *  #GWebResultFunc is invoked on a failure.
+ */
+enum GWebErrorEnum {
+	/**
+	 *  An error occorred when decoding a chunked HTTP response.
+	 */
+	G_WEB_ERROR_CHUNK_DECODE,
+
+	/**
+	 *  A host could not be resolved.
+	 */
+	G_WEB_ERROR_HOST_NOT_FOUND,
+};
+
 struct _GWeb;
 struct _GWebResult;
 struct _GWebParser;
