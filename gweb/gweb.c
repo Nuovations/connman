@@ -2240,7 +2240,7 @@ done:
 static void handle_resolved_address(struct web_session *session)
 {
 	struct addrinfo hints;
-	char *port;
+	g_autofree char *port;
 	int ret;
 
 	debug(session->web, "address %s", session->address);
@@ -2256,7 +2256,6 @@ static void handle_resolved_address(struct web_session *session)
 
 	port = g_strdup_printf("%u", session->port);
 	ret = getaddrinfo(session->address, port, &hints, &session->addr);
-	g_free(port);
 	if (ret != 0 || !session->addr) {
 		call_result_func(session, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
 		return;
