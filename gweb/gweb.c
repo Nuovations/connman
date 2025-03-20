@@ -157,6 +157,14 @@ static void _debug(GWeb *web, const char *file, const char *caller,
 	va_end(ap);
 }
 
+/**
+ *  Return the GWeb error quark.
+ *
+ *  @returns
+ *    The GWeb error GQuark.
+ */
+G_DEFINE_QUARK(g-web-error-quark, g_web_error)
+
 static inline void call_result_func(struct web_session *session, guint16 status)
 {
 

@@ -119,6 +119,8 @@ typedef bool (*GWebInputFunc)(const guint8 **data, gsize *length,
 
 typedef void (*GWebDebugFunc)(const char *str, gpointer user_data);
 
+#define G_WEB_ERROR g_web_error_quark()
+
 GWeb *g_web_new(int index);
 
 GWeb *g_web_ref(GWeb *web);
@@ -182,6 +184,8 @@ void g_web_parser_unref(GWebParser *parser);
 void g_web_parser_feed_data(GWebParser *parser,
 				const guint8 *data, gsize length);
 void g_web_parser_end_data(GWebParser *parser);
+
+GQuark g_web_error_quark(void);
 
 #ifdef __cplusplus
 }
