@@ -217,6 +217,8 @@ G_DEFINE_QUARK(g-web-error-quark, g_web_error)
  *    information about an error that occurred during the GWeb request,
  *    if any.
  *
+ *  @sa call_result_func_failure
+ *  @sa call_result_func_success
  *  @sa do_request
  *
  *  @private
@@ -232,6 +234,62 @@ static void call_result_func(struct web_session *session,
 		return;
 
 	session->result_func(error, &session->result, session->user_data);
+}
+
+/**
+ *  @brief
+ *    Invoke the closure callback on failure associated with the web
+ *    session request.
+ *
+ *  This closes the specified web session request on failure with @a
+ *  error by invoking the @a result_func originally assigned in
+ *  #do_request when the session was first initiated.
+ *
+ *  @param[in]  session
+ *    A pointer to the mutable web session request for which to invoke
+ *    the closure callback.
+ *
+ *  @param[in]  error
+ *    A required pointer to the immutable GError structure containing
+ *    informatino about an error that occurred during the GWeb
+ *    request.
+ *
+ *  @sa call_result_func
+ *  @sa call_result_func_success
+ *  @sa do_request
+ *
+ *  @private
+ *
+ */
+static inline void call_result_func_failure(struct web_session *session,
+					const GError *error)
+{
+	call_result_func(session, error);
+}
+
+/**
+ *  @brief
+ *    Invoke the closure callback on success associated with the web
+ *    session request.
+ *
+ *  This closes the specified web session request on success by
+ *  invoking the @a result_func originally assigned in #do_request
+ *  when the session was first initiated.
+ *
+ *  @param[in]  session
+ *    A pointer to the mutable web session request for which to invoke
+ *    the closure callback.
+ *
+ *  @sa call_result_func
+ *  @sa call_result_func_failure
+ *  @sa do_request
+ *
+ *  @private
+ *
+ */
+static void call_result_func_success(struct web_session *session)
+{
+	call_result_func(session, NULL);
 }
 
 static inline void call_route_func(struct web_session *session)
@@ -285,7 +343,7 @@ static gboolean connect_timeout_cb(gpointer user_data)
 					G_IO_ERROR_TIMED_OUT,
 					message);
 
-	call_result_func(session, local_error);
+	call_result_func_failure(session, local_error);
 
 	return G_SOURCE_REMOVE;
 }
@@ -1026,7 +1084,7 @@ static int decode_chunked(struct web_session *session,
 			if (session->chunk_left <= len) {
 				session->result.buffer = ptr;
 				session->result.length = session->chunk_left;
-				call_result_func(session, NULL);
+				call_result_func_success(session);
 
 				len -= session->chunk_left;
 				ptr += session->chunk_left;
@@ -1041,7 +1099,7 @@ static int decode_chunked(struct web_session *session,
 			/* more data */
 			session->result.buffer = ptr;
 			session->result.length = len;
-			call_result_func(session, NULL);
+			call_result_func_success(session);
 
 			session->chunk_left -= len;
 			session->total_len += len;
@@ -1068,7 +1126,7 @@ static int handle_body(struct web_session *session,
 		if (len > 0) {
 			session->result.buffer = buf;
 			session->result.length = len;
-			call_result_func(session, NULL);
+			call_result_func_success(session);
 		}
 		return 0;
 	}
@@ -1086,7 +1144,7 @@ static int handle_body(struct web_session *session,
 			G_WEB_ERROR_CHUNK_DECODE,
 			message);
 
-		call_result_func(session, local_error);
+		call_result_func_failure(session, local_error);
 	}
 
 	return err;
@@ -1320,7 +1378,7 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 			g_io_error_from_errno(EIO),
 			g_strerror(EIO));
 
-		call_result_func(session, local_error);
+		call_result_func_failure(session, local_error);
 
 		return FALSE;
 	}
@@ -2360,7 +2418,7 @@ static void handle_resolved_address(struct web_session *session)
 			session->address,
 			gai_strerror(ret));
 
-		call_result_func(session, local_error);
+		call_result_func_failure(session, local_error);
 
 		return;
 	}
@@ -2373,7 +2431,7 @@ static void handle_resolved_address(struct web_session *session)
 						g_io_error_from_errno(ret),
 						g_strerror(ret));
 
-		call_result_func(session, local_error);
+		call_result_func_failure(session, local_error);
 	}
 }
 
@@ -2399,7 +2457,7 @@ static void resolv_result(GResolvResultStatus status,
 				"could not resolve %s",
 				session->host);
 
-		call_result_func(session, local_error);
+		call_result_func_failure(session, local_error);
 
 		return;
 	}
