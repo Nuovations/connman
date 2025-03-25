@@ -658,7 +658,7 @@ static void wispr_portal_error(struct connman_wispr_portal_context *wp_context)
  *
  *  @sa portal_manage_success_status
  *  @sa wispr_portal_web_result_failure
- *  @sa wispr_portal_web_result_err
+ *  @sa wispr_portal_web_result_success
  *  @sa wispr_portal_web_result
  *
  *  @private
@@ -1025,7 +1025,7 @@ static bool wispr_manage_message(GWebResult *result,
  *                              finalizing.
  *
  *  @sa wispr_portal_web_result
- *  @sa wispr_portal_web_result_no_err
+ *  @sa wispr_portal_web_result_success
  *
  *  @private
  *
@@ -1040,6 +1040,25 @@ static void wispr_portal_web_result_failure(const GError *error,
 	wp_context->request_id = 0;
 }
 
+/**
+ *  @brief
+ *    Handle closure and finalization of a web request associated with
+ *    a successful "online" HTTP-based Internet reachability check.
+ *
+ *  @param[in]      result      A pointer to the mutable web request
+ *                              result being finalized.
+ *  @param[in,out]  wp_context  A pointer to the mutable WISPr portal
+ *                              detection context associated with the
+ *                              successful "online" HTTP-based
+ *                              Internet reachability check this is
+ *                              finalizing.
+ *
+ *  @sa wispr_portal_web_result
+ *  @sa wispr_portal_web_result_failure
+ *
+ *  @private
+ *
+ */
 static void wispr_portal_web_result_success(GWebResult *result,
 		struct connman_wispr_portal_context *wp_context)
 {
