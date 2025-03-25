@@ -133,7 +133,7 @@ struct connman_wispr_portal {
 	struct connman_wispr_portal_context *ipv6_context;
 };
 
-static bool wispr_portal_web_result(GWebResult *result, gpointer user_data);
+static bool wispr_portal_web_result(const GError *error, GWebResult *result, gpointer user_data);
 
 /**
  *  A dictionary / hash table of network interface indices to
@@ -1001,7 +1001,8 @@ static bool wispr_manage_message(GWebResult *result,
 	return false;
 }
 
-static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
+static bool wispr_portal_web_result(const GError *error, GWebResult *result,
+		gpointer user_data)
 {
 	struct connman_wispr_portal_context *wp_context = user_data;
 	const char *redirect = NULL;

@@ -43,7 +43,7 @@ static void sig_term(int sig)
 	g_main_loop_quit(main_loop);
 }
 
-static bool web_result(GWebResult *result, gpointer user_data)
+static bool web_result(const GError *error, GWebResult *result, gpointer user_data)
 {
 	const guint8 *chunk;
 	gsize length;

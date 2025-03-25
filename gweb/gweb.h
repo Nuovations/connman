@@ -125,7 +125,7 @@ typedef struct _GWeb GWeb;
 typedef struct _GWebResult GWebResult;
 typedef struct _GWebParser GWebParser;
 
-typedef bool (*GWebResultFunc)(GWebResult *result, gpointer user_data);
+typedef bool (*GWebResultFunc)(const GError *error, GWebResult *result, gpointer user_data);
 
 typedef bool (*GWebRouteFunc)(const char *addr, int ai_family,
 		int if_index, gpointer user_data);
