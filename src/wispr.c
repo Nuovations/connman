@@ -652,6 +652,9 @@ static void wispr_portal_error(struct connman_wispr_portal_context *wp_context)
  *                              associated with the unsuccessful
  *                              "online" HTTP-based Internet
  *                              reachability check.
+ *  @param[in]      message     A pointer to an immutable null-
+ *                              terminated C string describing the
+ *                              reason for the online check failure.
  *
  *  @sa portal_manage_success_status
  *  @sa wispr_portal_web_result_no_err
@@ -663,7 +666,8 @@ static void wispr_portal_error(struct connman_wispr_portal_context *wp_context)
  */
 static void portal_manage_failure_status(
 			struct connman_wispr_portal_context *wp_context,
-			int err)
+			int err,
+			const char *message)
 {
 	struct connman_service *service = wp_context->service;
 	enum connman_ipconfig_type type = wp_context->type;
@@ -810,8 +814,11 @@ static void wispr_portal_request_portal(
 					wispr_route_request,
 					wp_context, &err);
 
+	DBG("wp_context->request_id %d err %d",
+		wp_context->request_id, err);
+
 	if (wp_context->request_id == 0) {
-		portal_manage_failure_status(wp_context, err);
+		portal_manage_failure_status(wp_context, -err, strerror(-err));
 		wispr_portal_error(wp_context);
 		wispr_portal_context_unref(wp_context);
 	}
@@ -1001,35 +1008,22 @@ static bool wispr_manage_message(GWebResult *result,
 	return false;
 }
 
-static bool wispr_portal_web_result(const GError *error, GWebResult *result,
-		gpointer user_data)
+static void wispr_portal_web_result_failure(const GError *error,
+		GWebResult *result,
+		struct connman_wispr_portal_context *wp_context)
 {
-	struct connman_wispr_portal_context *wp_context = user_data;
-	const char *redirect = NULL;
-	const guint8 *chunk = NULL;
-	const char *str = NULL;
+	portal_manage_failure_status(wp_context, 0, error->message);
+
+	free_wispr_routes(wp_context);
+	wp_context->request_id = 0;
+}
+
+static void wispr_portal_web_result_success(GWebResult *result,
+		struct connman_wispr_portal_context *wp_context)
+{
 	guint16 status;
-	gsize length;
-
-	DBG("");
-
-	if (wp_context->wispr_result != CONNMAN_WISPR_RESULT_ONLINE) {
-		g_web_result_get_chunk(result, &chunk, &length);
-
-		if (length > 0) {
-			g_web_parser_feed_data(wp_context->wispr_parser,
-								chunk, length);
-			/* read more data */
-			return true;
-		}
-
-		g_web_parser_end_data(wp_context->wispr_parser);
-
-		if (wp_context->wispr_msg.message_type >= 0) {
-			if (wispr_manage_message(result, wp_context))
-				goto done;
-		}
-	}
+	const char *str = NULL;
+	const char *redirect = NULL;
 
 	status = g_web_result_get_status(result);
 
@@ -1083,17 +1077,17 @@ static bool wispr_portal_web_result(const GError *error, GWebResult *result,
 				redirect, wispr_portal_web_result,
 				wispr_route_request, wp_context, NULL);
 
-		goto done;
+		return;
 	case GWEB_HTTP_STATUS_CODE_BAD_REQUEST:
-		portal_manage_failure_status(wp_context, -EINVAL);
+		portal_manage_failure_status(wp_context, 0, "bad request");
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_NOT_FOUND:
-		portal_manage_failure_status(wp_context, -ENOENT);
+		portal_manage_failure_status(wp_context, 0, "resource not found");
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT:
-		portal_manage_failure_status(wp_context, -ETIMEDOUT);
+		portal_manage_failure_status(wp_context, 0, "request timeout");
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_HTTP_VERSION_NOT_SUPPORTED:
@@ -1108,6 +1102,46 @@ static bool wispr_portal_web_result(const GError *error, GWebResult *result,
 
 	free_wispr_routes(wp_context);
 	wp_context->request_id = 0;
+}
+
+static bool wispr_portal_web_result(const GError *error, GWebResult *result,
+		gpointer user_data)
+{
+	struct connman_wispr_portal_context *wp_context = user_data;
+	const guint8 *chunk = NULL;
+	gsize length;
+
+	DBG("error %p result %p user_data %p wispr_result %d",
+		error, result, user_data, wp_context->wispr_result);
+
+	if (wp_context->wispr_result != CONNMAN_WISPR_RESULT_ONLINE) {
+		g_web_result_get_chunk(result, &chunk, &length);
+
+		DBG("length %zu", length);
+
+		if (length > 0) {
+			g_web_parser_feed_data(wp_context->wispr_parser,
+								chunk, length);
+			/* read more data */
+			return true;
+		}
+
+		g_web_parser_end_data(wp_context->wispr_parser);
+
+		DBG("wp_context->wispr_msg.message_type %d",
+			wp_context->wispr_msg.message_type);
+
+		if (wp_context->wispr_msg.message_type >= 0) {
+			if (wispr_manage_message(result, wp_context))
+				goto done;
+		}
+	}
+
+	if (error)
+		wispr_portal_web_result_failure(error, result, wp_context);
+	else
+		wispr_portal_web_result_success(result, wp_context);
+
 done:
 	wp_context->wispr_msg.message_type = -1;
 
@@ -1196,7 +1230,7 @@ static void proxy_callback(const char *proxy, void *user_data)
 	if (!proxy) {
 		wispr_log_proxy_failure(wp_context, "No valid proxy");
 
-		portal_manage_failure_status(wp_context, -EINVAL);
+		portal_manage_failure_status(wp_context, 0, "no valid proxy");
 
 		return;
 	}
@@ -1543,7 +1577,7 @@ int __connman_wispr_start(struct connman_service *service,
 free_wp:
 	DBG("err %d wp_context %p", err, wp_context);
 
-	portal_manage_failure_status(wp_context, err);
+	portal_manage_failure_status(wp_context, -err, strerror(-err));
 
 	g_hash_table_remove(wispr_portal_hash, GINT_TO_POINTER(index));
 	return err;
@@ -1629,7 +1663,8 @@ int __connman_wispr_cancel(struct connman_service *service,
 
 	cancel_connman_wispr_portal_context(wp_context);
 
-	portal_manage_failure_status(wp_context, -ECANCELED);
+	portal_manage_failure_status(wp_context, -ECANCELED,
+		strerror(-ECANCELED));
 
 	wispr_portal_context_unref(wp_context);
 
