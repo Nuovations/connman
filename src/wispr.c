@@ -657,7 +657,7 @@ static void wispr_portal_error(struct connman_wispr_portal_context *wp_context)
  *                              reason for the online check failure.
  *
  *  @sa portal_manage_success_status
- *  @sa wispr_portal_web_result_no_err
+ *  @sa wispr_portal_web_result_failure
  *  @sa wispr_portal_web_result_err
  *  @sa wispr_portal_web_result
  *
@@ -1008,6 +1008,28 @@ static bool wispr_manage_message(GWebResult *result,
 	return false;
 }
 
+/**
+ *  @brief
+ *    Handle closure and finalization of a web request associated with
+ *    an unsuccessful "online" HTTP-based Internet reachability check.
+ *
+ *  @param[in]      error       A pointer to the immutable GLib GError
+ *                              instance associated the web request
+ *                              failure.
+ *  @param[in]      result      A pointer to the mutable web request
+ *                              result being finalized.
+ *  @param[in,out]  wp_context  A pointer to the mutable WISPr portal
+ *                              detection context associated with the
+ *                              unsuccessful "online" HTTP-based
+ *                              Internet reachability check this is
+ *                              finalizing.
+ *
+ *  @sa wispr_portal_web_result
+ *  @sa wispr_portal_web_result_no_err
+ *
+ *  @private
+ *
+ */
 static void wispr_portal_web_result_failure(const GError *error,
 		GWebResult *result,
 		struct connman_wispr_portal_context *wp_context)
