@@ -672,7 +672,7 @@ static void portal_manage_failure_status(
 	struct connman_service *service = wp_context->service;
 	enum connman_ipconfig_type type = wp_context->type;
 
-	wp_context->cb(service, type, false, err);
+	wp_context->cb(service, type, false, err, message);
 }
 
 /**
@@ -724,7 +724,7 @@ static void portal_manage_success_status(GWebResult *result,
 				&str))
 		connman_info("Client-Timezone: %s", str);
 
-	wp_context->cb(service, type, true, 0);
+	wp_context->cb(service, type, true, 0, NULL);
 }
 
 static bool wispr_route_request(const char *address, int ai_family,

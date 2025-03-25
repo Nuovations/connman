@@ -240,7 +240,8 @@ static void service_list_sort(const char *function);
 static void complete_online_check(struct connman_service *service,
 					enum connman_ipconfig_type type,
 					bool success,
-					int err);
+					int err,
+					const char *message);
 static bool service_downgrade_online_state(struct connman_service *service);
 static bool connman_service_is_default(const struct connman_service *service);
 static int start_online_check_if_connected(struct connman_service *service);
@@ -3451,27 +3452,27 @@ static bool handle_online_check_success(struct connman_service *service,
  *                       check failure.
  *  @param[in]  type     The IP configuration type for which
  *                       the online check failed.
- *  @param[in]  err      The error status, in the POSIX domain,
- *                       associated with the online check failure.
+ *  @param[in]  message  A pointer to an immutable null-terminated
+ *                       C string describing the reason for the online
+ *                       check failure.
  *
  */
 static void online_check_log_failure(const struct connman_service *service,
 			enum connman_ipconfig_type type,
-			int err)
+			const char *message)
 {
 	g_autofree char *interface = NULL;
 
 	interface = connman_service_get_interface(service);
 
-	connman_warn("Interface %s [ %s ] %s online check to %s failed: %d: %s",
+	connman_warn("Interface %s [ %s ] %s online check to %s failed: %s",
 		interface,
 		__connman_service_type2string(service->type),
 		__connman_ipconfig_type2string(type),
 		type == CONNMAN_IPCONFIG_TYPE_IPV4 ?
 			connman_setting_get_string("OnlineCheckIPv4URL") :
 			connman_setting_get_string("OnlineCheckIPv6URL"),
-		err,
-		strerror(-err));
+			message);
 }
 
 /**
@@ -3507,6 +3508,10 @@ static void online_check_log_failure(const struct connman_service *service,
  *                                      the failed previously-requested
  *                                      online check. This is expected
  *                                      to be less than zero ('< 0').
+ *  @param[in]      message             A pointer to an immutable null-
+ *                                      terminated C string describing
+ *                                      the reason for the online
+ *                                      check failure.
  *
  *  @returns
  *    True, unconditionally.
@@ -3520,7 +3525,8 @@ static bool handle_oneshot_online_check_failure(
 			enum connman_ipconfig_type type,
 			enum connman_service_state ipconfig_state,
 			struct online_check_state *online_check_state,
-			int err)
+			int err,
+			const char *message)
 {
 	const bool reschedule = true;
 
@@ -3562,6 +3568,10 @@ static bool handle_oneshot_online_check_failure(
  *                                      the failed previously-requested
  *                                      online check. This is expected
  *                                      to be less than zero ('< 0').
+ *  @param[in]      message             A pointer to an immutable null-
+ *                                      terminated C string describing
+ *                                      the reason for the online
+ *                                      check failure.
  *
  *  @returns
  *    True if another online check should be scheduled; otherwise,
@@ -3576,7 +3586,8 @@ static bool handle_continuous_online_check_failure(
 			enum connman_ipconfig_type type,
 			enum connman_service_state ipconfig_state,
 			struct online_check_state *online_check_state,
-			int err)
+			int err,
+			const char *message)
 {
 	bool reschedule = false;
 
@@ -3699,6 +3710,10 @@ static bool handle_continuous_online_check_failure(
  *                                      the failed previously-requested
  *                                      online check. This is expected
  *                                      to be less than zero ('< 0').
+ *  @param[in]      message             A pointer to an immutable null-
+ *                                      terminated C string describing
+ *                                      the reason for the online
+ *                                      check failure.
  *
  *  @returns
  *    True if another online check should be scheduled; otherwise,
@@ -3714,17 +3729,18 @@ static bool handle_online_check_failure(struct connman_service *service,
 				enum connman_service_state ipconfig_state,
 				struct online_check_state *online_check_state,
 				bool oneshot,
-				int err)
+				int err,
+				const char *message)
 {
 	bool reschedule = false;
 
 	DBG("service %p (%s) type %d (%s) state %d (%s) "
-		"one-shot %u err %d (%s)\n",
+		"one-shot %u err %d message %s\n",
 		service,
 		connman_service_get_identifier(service),
 		type, __connman_ipconfig_type2string(type),
 		ipconfig_state, state2string(ipconfig_state),
-		oneshot, err, strerror(-err));
+		oneshot, err, message ? message : "<null>");
 
 	/*
 	 * Regardless of online check mode, if this completion closure
@@ -3740,7 +3756,7 @@ static bool handle_online_check_failure(struct connman_service *service,
 
 	/* Unconditionally log the failure, regardless of online check mode. */
 
-	online_check_log_failure(service, type, err);
+	online_check_log_failure(service, type, message);
 
 	/* Handle the failure according to the online check mode. */
 
@@ -3750,14 +3766,16 @@ static bool handle_online_check_failure(struct connman_service *service,
 						type,
 						ipconfig_state,
 						online_check_state,
-						err);
+						err,
+						message);
 	else
 		reschedule = handle_continuous_online_check_failure(
 						service,
 						type,
 						ipconfig_state,
 						online_check_state,
-						err);
+						err,
+						message);
 
 done:
 	return reschedule;
@@ -3803,6 +3821,9 @@ done:
  *                           to be zero ('0') if @a success is @a true
  *                           and less than zero ('< 0') if @a success
  *                           is @a false.
+ *  @param[in]      message  An optional pointer to an immutable null-
+ *                           terminated C string describing the reason
+ *                           for the online check failure.
  *
  *  @sa cancel_online_check
  *  @sa start_online_check
@@ -3816,7 +3837,8 @@ done:
 static void complete_online_check(struct connman_service *service,
 					enum connman_ipconfig_type type,
 					bool success,
-					int err)
+					int err,
+					const char *message)
 {
 	const bool oneshot = __connman_service_is_online_check_mode(
 		CONNMAN_SERVICE_ONLINE_CHECK_MODE_ONE_SHOT);
@@ -3825,11 +3847,11 @@ static void complete_online_check(struct connman_service *service,
 	bool reschedule = false;
 
 	DBG("service %p (%s) type %d (%s) "
-		"success %u err %d (%s)\n",
+		"success %u err %d message %s\n",
 		service,
 		connman_service_get_identifier(service),
 		type, __connman_ipconfig_type2string(type),
-		success, err, strerror(-err));
+		success, err, message ? message : "<null>");
 
 	if (type == CONNMAN_IPCONFIG_TYPE_IPV4) {
 		online_check_state = &service->online_check_state_ipv4;
@@ -3851,7 +3873,8 @@ static void complete_online_check(struct connman_service *service,
 					 ipconfig_state,
 					 online_check_state,
 					 oneshot,
-					 err);
+					 err,
+					 message);
 
 	DBG("reschedule online check %u", reschedule);
 

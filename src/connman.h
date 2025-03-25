@@ -550,7 +550,8 @@ void __connman_wpad_stop(struct connman_service *service);
 typedef void (*__connman_wispr_cb_t) (struct connman_service *service,
 				enum connman_ipconfig_type type,
 				bool success,
-				int err);
+				int err,
+				const char *message);
 
 int __connman_wispr_init(void);
 void __connman_wispr_cleanup(void);
