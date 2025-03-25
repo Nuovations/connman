@@ -1735,7 +1735,7 @@ int __connman_wispr_cancel(struct connman_service *service,
 	cancel_connman_wispr_portal_context(wp_context);
 
 	portal_manage_failure_status(wp_context, -ECANCELED,
-		strerror(-ECANCELED));
+		strerror(ECANCELED));
 
 	wispr_portal_context_unref(wp_context);
 
