@@ -29,6 +29,10 @@ m4/
 !m4/configmake.m4
 TAGS
 cscope.*
+tap-driver.sh
+test-suite.log
+unit/*.log
+unit/*.trs
 
 connman.pc
 include/connman

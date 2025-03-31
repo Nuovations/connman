@@ -324,6 +324,9 @@ unit_test_ippool_SOURCES = $(backtrace_sources) src/log.c src/dbus.c \
 unit_test_ippool_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+			$(top_srcdir)/tap-driver.sh
+
 TESTS = unit/test-ippool
 
 if WISPR
@@ -501,7 +504,7 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-datafiles \
 DISTCLEANFILES = $(pkgconfig_DATA)
 
 MAINTAINERCLEANFILES = Makefile.in \
-	aclocal.m4 configure config.h.in config.sub config.guess \
+	aclocal.m4 configure config.h.in config.sub config.guess tap-driver.sh \
 	ltmain.sh depcomp compile missing install-sh mkinstalldirs test-driver
 
 

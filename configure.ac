@@ -1,6 +1,8 @@
 AC_PREREQ([2.69])
 AC_INIT([connman], [1.43])
 
+AC_REQUIRE_AUX_FILE([tap-driver.sh])
+
 AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE([foreign subdir-objects color-tests])
@@ -30,6 +32,7 @@ AC_PROG_CC_LSAN
 AC_PROG_CC_UBSAN
 AC_PROG_INSTALL
 AC_PROG_MKDIR_P
+AC_PROG_AWK
 
 m4_define([_LT_AC_TAGCONFIG], [])
 m4_ifdef([AC_LIBTOOL_TAGS], [AC_LIBTOOL_TAGS([])])
