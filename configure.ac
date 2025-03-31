@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([connman], [1.43])
+AC_INIT([connman], [1.44])
 
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 

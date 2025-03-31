@@ -1,3 +1,9 @@
+ver 1.44:
+	Fix issue with handling oFono context integration.
+	Fix issue with handling web context for online detection.
+	Fix issue with handling flags used when deleting routes.
+	Fix issue with handling PAC proxy integration.
+
 ver 1.43:
 	Fix issue with device creation when using LTE.
 	Fix issue with regulatory domain when powering up.
