@@ -920,8 +920,8 @@ static void start_request(struct web_session *session)
 {
 	GString *buf = session->send_buffer;
 	const char *version;
-	const guint8 *body;
-	gsize length;
+	const guint8 *body = NULL;
+	gsize length = 0;
 
 	debug(session->web, "request %s from %s",
 					session->request, session->host);
@@ -981,7 +981,7 @@ static void start_request(struct web_session *session)
 			g_string_append_printf(buf, "%zx\r\n", length);
 			g_string_append_len(buf, (char *) body, length);
 			g_string_append(buf, "\r\n");
-		} else if (session->fd == -1)
+		} else if (session->fd == -1 && body)
 			g_string_append_len(buf, (char *) body, length);
 	}
 }
