@@ -506,6 +506,8 @@ static void vpn_task_setup(gpointer user_data)
 	/* Change user for the task if set, requires CAP_SETUID */
 	if (uid > 0 && setuid(uid))
 		connman_error("error setting uid %d %s", uid, strerror(errno));
+
+	g_free(gid_list);
 }
 
 
