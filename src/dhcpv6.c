@@ -3,6 +3,7 @@
  *  Connection Manager
  *
  *  Copyright (C) 2012-2013  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2025  Jolla Mobile Ltd
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -2064,6 +2065,7 @@ static GDHCPClient *create_pd_client(struct connman_dhcpv6 *dhcp, int *err)
 
 	g_dhcpv6_client_create_iaid(dhcp_client, index, (unsigned char *)&iaid);
 	g_dhcpv6_client_set_iaid(dhcp_client, iaid);
+	*err = 0;
 
 	return dhcp_client;
 }
