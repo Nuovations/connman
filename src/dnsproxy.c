@@ -1685,8 +1685,13 @@ static int ns_resolv(struct server_data *server, struct request_data *req,
 				gpointer request, gpointer name)
 {
 	int sk = -1;
+	int err;
 	const char *lookup = (const char *)name;
-	int err = ns_try_resolv_from_cache(req, request, lookup);
+
+	if (!lookup || strlen(lookup) == 0)
+		return -EINVAL;
+
+	err = ns_try_resolv_from_cache(req, request, lookup);
 
 	if (err > 0)
 		/* cache hit */
