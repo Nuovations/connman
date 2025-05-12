@@ -998,6 +998,9 @@ static int parse_rr(const unsigned char *buf, const unsigned char *start,
 	if ((offset + *rdlen) > *response_size)
 		return -ENOBUFS;
 
+	if ((*end + *rdlen) > max)
+		return -EINVAL;
+
 	memcpy(response + offset, *end, *rdlen);
 
 	*end += *rdlen;
