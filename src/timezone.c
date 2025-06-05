@@ -124,8 +124,8 @@ static int compare_file(void *src_map, struct stat *src_st,
 
 	DBG("real path %s path name %s", real_path, pathname);
 
-	if (real_path && !g_strcmp0(real_path, pathname))
-		return 0;
+	if (real_path && g_strcmp0(real_path, pathname))
+		return -1;
 
 	fd = open(pathname, O_RDONLY | O_CLOEXEC);
 	if (fd < 0)
