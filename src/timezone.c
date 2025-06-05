@@ -507,28 +507,18 @@ done:
 	return zone;
 }
 
-static int write_file(void *src_map, struct stat *src_st, const char *pathname)
+static int write_symlink(const char *target, const char *link)
 {
 	struct stat st;
-	int fd;
-	ssize_t written;
 
-	DBG("pathname %s", pathname);
+	DBG("pathname %s", link);
 
-	if (lstat(pathname, &st) == 0) {
-		if (S_ISLNK(st.st_mode))
-			unlink(pathname);
+	if (lstat(link, &st) == 0) {
+		if (S_ISLNK(st.st_mode) || S_ISREG(st.st_mode))
+			unlink(link);
 	}
 
-	fd = open(pathname, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-	if (fd < 0)
-		return -EIO;
-
-	written = write(fd, src_map, src_st->st_size);
-
-	close(fd);
-
-	if (written < 0)
+	if (symlink(target, link) < 0)
 		return -EIO;
 
 	return 0;
@@ -537,35 +527,16 @@ static int write_file(void *src_map, struct stat *src_st, const char *pathname)
 int __connman_timezone_change(const char *zone)
 {
 	struct stat st;
-	char *map, pathname[PATH_MAX];
-	int fd, err;
+	g_autofree char *pathname = NULL;
 
 	DBG("zone %s", zone);
 
-	snprintf(pathname, PATH_MAX, "%s/%s", USR_SHARE_ZONEINFO, zone);
+	pathname = g_strdup_printf("%s/%s", USR_SHARE_ZONEINFO, zone);
 
-	fd = open(pathname, O_RDONLY | O_CLOEXEC);
-	if (fd < 0)
+	if (stat(pathname, &st) < 0 || !S_ISREG(st.st_mode))
 		return -EINVAL;
 
-	if (fstat(fd, &st) < 0) {
-		close(fd);
-		return -EIO;
-	}
-
-	map = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-	if (!map || map == MAP_FAILED) {
-		close(fd);
-		return -EIO;
-	}
-
-	err = write_file(map, &st, connman_setting_get_string("Localtime"));
-
-	munmap(map, st.st_size);
-
-	close(fd);
-
-	return err;
+	return write_symlink(pathname, connman_setting_get_string("Localtime"));
 }
 
 static guint inotify_watch = 0;
