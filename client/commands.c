@@ -1874,7 +1874,7 @@ static int session_create_cb(DBusMessageIter *iter, int errnum,
 	char *str;
 
 	if (error) {
-		fprintf(stderr, "Error creating session: %s", error);
+		fprintf(stderr, "Error creating session: %s\n", error);
 		session_notify_remove();
 		return 0;
 	}
@@ -2044,7 +2044,7 @@ static int session_destroy_cb(DBusMessageIter *iter, int errnum,
 			const char *error, void *user_data)
 {
 	if (error) {
-		fprintf(stderr, "Error destroying session: %s", error);
+		fprintf(stderr, "Error destroying session: %s\n", error);
 		return 0;
 	}
 
@@ -3026,7 +3026,7 @@ static int populate_service_hash(DBusMessageIter *iter, int errnum,
 				const char *error, void *user_data)
 {
 	if (error) {
-		fprintf(stderr, "Error getting services: %s", error);
+		fprintf(stderr, "Error getting services: %s\n", error);
 		return 0;
 	}
 
@@ -3086,7 +3086,7 @@ static int populate_vpnconnection_hash(DBusMessageIter *iter, int errnum,
 	DBusMessageIter array;
 
 	if (error) {
-		fprintf(stderr, "Error getting VPN connections: %s", error);
+		fprintf(stderr, "Error getting VPN connections: %s\n", error);
 		return 0;
 	}
 
@@ -3158,7 +3158,7 @@ static int populate_peer_hash(DBusMessageIter *iter, int errnum,
 			const char *error, void *user_data)
 {
 	if (error) {
-		fprintf(stderr, "Error getting peers: %s", error);
+		fprintf(stderr, "Error getting peers: %s\n", error);
 		return 0;
 	}
 
