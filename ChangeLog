@@ -1,3 +1,8 @@
+ver 1.45:
+	Fix issue with setting MFP optional for PSK.
+	Fix issue with comparison in timezone checking.
+	Fix issue with dnsproxy and empty lookup.
+
 ver 1.44:
 	Fix issue with handling oFono context integration.
 	Fix issue with handling web context for online detection.
