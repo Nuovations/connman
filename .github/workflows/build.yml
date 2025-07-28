@@ -34,6 +34,7 @@ jobs:
     name: "clang/LLVM-${{matrix.clang_version}} ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         clang_version: [ "9", "10", "11", "12" ]
         configuration:
@@ -81,6 +82,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     strategy:
+      fail-fast: false
       matrix:
         configuration:
           - { name: "Debug",   options: "--enable-debug --disable-optimization" }
