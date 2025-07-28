@@ -77,6 +77,11 @@ for this entry when empty is ethernet,wifi,cellular.
 Services that are automatically connected must have been
 set up and saved to storage beforehand.
 .TP
+.BI DefaultEnabledTechnologies= technology\fR[,...]
+List of technologies that are marked enabled or powered
+by default, separated by commas ",". The default value for
+this entry when empty is \fIethernet\fR.
+.TP
 .BI DefaultFavoriteTechnologies= technology\fR[,...]
 List of technologies that are marked favorite by default,
 separated by commas ",". The default value for this entry
