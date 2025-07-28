@@ -429,19 +429,27 @@ static void technology_load(struct connman_technology *technology)
 	GKeyFile *keyfile;
 	gchar *identifier;
 	GError *error = NULL;
-	bool enable, need_saving = false;
+	bool enable, need_saving = false, enable_persistent = false;
 	char *enc;
+	int i;
+	unsigned int *enabled_types;
 
 	DBG("technology %p", technology);
+
+	/* Determine which technology types are enabled by default */
+
+	enabled_types = connman_setting_get_uint_list("DefaultEnabledTechnologies");
+	for (i = 0; enabled_types && enabled_types[i] != 0; i++) {
+		if (technology->type == enabled_types[i]) {
+			enable_persistent = true;
+			break;
+		}
+	}
 
 	keyfile = __connman_storage_load_global();
 	/* Fallback on disabling technology if file not found. */
 	if (!keyfile) {
-		if (technology->type == CONNMAN_SERVICE_TYPE_ETHERNET)
-			/* We enable ethernet by default */
-			technology->enable_persistent = true;
-		else
-			technology->enable_persistent = false;
+		technology->enable_persistent = enable_persistent;
 		return;
 	}
 
@@ -453,10 +461,7 @@ static void technology_load(struct connman_technology *technology)
 	if (!error)
 		technology->enable_persistent = enable;
 	else {
-		if (technology->type == CONNMAN_SERVICE_TYPE_ETHERNET)
-			technology->enable_persistent = true;
-		else
-			technology->enable_persistent = false;
+		technology->enable_persistent = enable_persistent;
 
 		need_saving = true;
 		g_clear_error(&error);
