@@ -78,6 +78,11 @@ static char *default_auto_connect[] = {
 	NULL
 };
 
+static char * default_enabled_techs[] = {
+	"ethernet",
+	NULL
+};
+
 static char *default_favorite_techs[] = {
 	"ethernet",
 	NULL
@@ -99,6 +104,7 @@ static struct {
 	bool bg_scan;
 	char **pref_timeservers;
 	unsigned int *auto_connect;
+	unsigned int *enabled_techs;
 	unsigned int *favorite_techs;
 	unsigned int *preferred_techs;
 	unsigned int *always_connected_techs;
@@ -134,6 +140,7 @@ static struct {
 	.bg_scan = true,
 	.pref_timeservers = NULL,
 	.auto_connect = NULL,
+	.enabled_techs = NULL,
 	.favorite_techs = NULL,
 	.preferred_techs = NULL,
 	.always_connected_techs = NULL,
@@ -171,6 +178,7 @@ static struct {
 #define CONF_BG_SCAN                    "BackgroundScanning"
 #define CONF_PREF_TIMESERVERS           "FallbackTimeservers"
 #define CONF_AUTO_CONNECT_TECHS         "DefaultAutoConnectTechnologies"
+#define CONF_ENABLED_TECHS              "DefaultEnabledTechnologies"
 #define CONF_FAVORITE_TECHS             "DefaultFavoriteTechnologies"
 #define CONF_ALWAYS_CONNECTED_TECHS     "AlwaysConnectedTechnologies"
 #define CONF_PREFERRED_TECHS            "PreferredTechnologies"
@@ -207,6 +215,7 @@ static const char *supported_options[] = {
 	CONF_BG_SCAN,
 	CONF_PREF_TIMESERVERS,
 	CONF_AUTO_CONNECT_TECHS,
+	CONF_ENABLED_TECHS,
 	CONF_FAVORITE_TECHS,
 	CONF_ALWAYS_CONNECTED_TECHS,
 	CONF_PREFERRED_TECHS,
@@ -437,6 +446,9 @@ static void parse_config(GKeyFile *config, const char *file)
 		connman_settings.auto_connect =
 			parse_service_types(default_auto_connect,
 					CONF_ARRAY_SIZE(default_auto_connect));
+		connman_settings.enabled_techs =
+			parse_service_types(default_enabled_techs,
+					CONF_ARRAY_SIZE(default_enabled_techs));
 		connman_settings.favorite_techs =
 			parse_service_types(default_favorite_techs,
 					CONF_ARRAY_SIZE(default_favorite_techs));
@@ -476,6 +488,22 @@ static void parse_config(GKeyFile *config, const char *file)
 	else
 		connman_settings.auto_connect =
 			parse_service_types(default_auto_connect, CONF_ARRAY_SIZE(default_auto_connect));
+
+	g_strfreev(str_list);
+
+	g_clear_error(&error);
+
+	/* DefaultEnabledTechnologies */
+
+	str_list = __connman_config_get_string_list(config, GENERAL_GROUP,
+			CONF_ENABLED_TECHS, &len, &error);
+
+	if (!error)
+		connman_settings.enabled_techs =
+			parse_service_types(str_list, len);
+	else
+		connman_settings.enabled_techs =
+			parse_service_types(default_enabled_techs, CONF_ARRAY_SIZE(default_enabled_techs));
 
 	g_strfreev(str_list);
 
@@ -1110,6 +1138,9 @@ unsigned int *connman_setting_get_uint_list(const char *key)
 {
 	if (g_str_equal(key, CONF_AUTO_CONNECT_TECHS))
 		return connman_settings.auto_connect;
+
+	if (g_str_equal(key, CONF_ENABLED_TECHS))
+		return connman_settings.enabled_techs;
 
 	if (g_str_equal(key, CONF_FAVORITE_TECHS))
 		return connman_settings.favorite_techs;
