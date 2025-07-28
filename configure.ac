@@ -1,5 +1,7 @@
 AC_PREREQ([2.69])
-AC_INIT([connman], [1.43])
+AC_INIT([connman], [1.45])
+
+AC_REQUIRE_AUX_FILE([tap-driver.sh])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -30,6 +32,7 @@ AC_PROG_CC_LSAN
 AC_PROG_CC_UBSAN
 AC_PROG_INSTALL
 AC_PROG_MKDIR_P
+AC_PROG_AWK
 
 m4_define([_LT_AC_TAGCONFIG], [])
 m4_ifdef([AC_LIBTOOL_TAGS], [AC_LIBTOOL_TAGS([])])
@@ -284,8 +287,13 @@ fi
 
 AC_DEFINE_UNQUOTED([STATS_MAX_FILE_SIZE], (${stats_max_file_size}), [Maximal size of a statistics round robin file])
 
-PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.40, dummy=yes,
-				AC_MSG_ERROR(GLib >= 2.40 is required))
+PKG_CHECK_MODULES(GIO, gio-2.0 >= 2.44, dummy=yes,
+				AC_MSG_ERROR(GIo >= 2.44 is required))
+AC_SUBST(GIO_CFLAGS)
+AC_SUBST(GIO_LIBS)
+
+PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.44, dummy=yes,
+				AC_MSG_ERROR(GLib >= 2.44 is required))
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 

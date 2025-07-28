@@ -4,6 +4,7 @@
  *
  *  Copyright (C) 2010-2014  BMW Car IT GmbH.
  *  Copyright (C) 2016-2019  Jolla Ltd.
+ *  Copyright (C) 2025  Jolla Mobile Ltd
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -117,7 +118,10 @@ struct ov_private_data {
 
 static void ov_connect_done(struct ov_private_data *data, int err)
 {
-	if (data && data->cb) {
+	if (!data)
+		return;
+
+	if (data->cb) {
 		vpn_provider_connect_cb_t cb = data->cb;
 		void *user_data = data->user_data;
 

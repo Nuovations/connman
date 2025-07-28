@@ -140,7 +140,7 @@ src_connmand_SOURCES += src/dns-systemd-resolved.c
 endif
 
 src_connmand_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-			@GLIB_LIBS@ @DBUS_LIBS@ @GNUTLS_LIBS@ \
+			@GIO_LIBS@ @GLIB_LIBS@ @DBUS_LIBS@ @GNUTLS_LIBS@ \
 			-lresolv -ldl -lrt
 
 src_connmand_LDFLAGS = -Wl,--export-dynamic \
@@ -184,7 +184,7 @@ vpn_connman_vpnd_SOURCES = $(builtin_vpn_sources) $(backtrace_sources) \
 			vpn/vpn-config.c vpn/vpn-settings.c vpn/vpn-util.c
 
 vpn_connman_vpnd_LDADD = gdbus/libgdbus-internal.la $(builtin_vpn_libadd) \
-				@GLIB_LIBS@ @DBUS_LIBS@ @GNUTLS_LIBS@ \
+				@GIO_LIBS@ @GLIB_LIBS@ @DBUS_LIBS@ @GNUTLS_LIBS@ \
 				-lresolv -ldl
 
 vpn_connman_vpnd_LDFLAGS = -Wl,--export-dynamic \
@@ -324,13 +324,16 @@ unit_test_ippool_SOURCES = $(backtrace_sources) src/log.c src/dbus.c \
 unit_test_ippool_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+			$(top_srcdir)/tap-driver.sh
+
 TESTS = unit/test-ippool
 
 if WISPR
 noinst_PROGRAMS += tools/wispr
 
 tools_wispr_SOURCES = $(gweb_sources) tools/wispr.c
-tools_wispr_LDADD = @GLIB_LIBS@ @GNUTLS_LIBS@ -lresolv
+tools_wispr_LDADD = @GIO_LIBS@ @GLIB_LIBS@ @GNUTLS_LIBS@ -lresolv
 endif
 
 if TOOLS
@@ -349,7 +352,7 @@ tools_supplicant_test_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@
 
 tools_web_test_SOURCES = $(gweb_sources) tools/web-test.c
-tools_web_test_LDADD = @GLIB_LIBS@ @GNUTLS_LIBS@ -lresolv
+tools_web_test_LDADD = @GIO_LIBS@ @GLIB_LIBS@ @GNUTLS_LIBS@ -lresolv
 
 tools_resolv_test_SOURCES = gweb/gresolv.h gweb/gresolv.c tools/resolv-test.c
 tools_resolv_test_LDADD = @GLIB_LIBS@ -lresolv
@@ -411,7 +414,7 @@ unit_test_iptables_LDADD = @GLIB_LIBS@ -ldl
 endif
 
 tools_dnsproxy_test_SOURCES = tools/dnsproxy-test.c
-tools_dnsproxy_test_LDADD = @GLIB_LIBS@
+tools_dnsproxy_test_LDADD = @GIO_LIBS@ @GLIB_LIBS@
 
 endif
 
@@ -501,7 +504,7 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-datafiles \
 DISTCLEANFILES = $(pkgconfig_DATA)
 
 MAINTAINERCLEANFILES = Makefile.in \
-	aclocal.m4 configure config.h.in config.sub config.guess \
+	aclocal.m4 configure config.h.in config.sub config.guess tap-driver.sh \
 	ltmain.sh depcomp compile missing install-sh mkinstalldirs test-driver
 
 

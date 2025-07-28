@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -39,6 +38,8 @@
 #include <net/if.h>
 #include <netinet/tcp.h>
 #include <ifaddrs.h>
+
+#include <gio/gio.h>
 
 #include "giognutls.h"
 #include "gresolv.h"
@@ -62,14 +63,6 @@ enum chunk_state {
  *  @private
  */
 struct _GWebResult {
-	/**
-	 *	Operating system error, if any, associated with the request.
-	 *
-	 *	0 on success; otherwise, < 0 (negate to arrive at a POSIX
-	 *	domain error number).
-	 */
-	int err;
-
 	/**
 	 *	HTTP status code on success.
 	 */
@@ -199,6 +192,14 @@ static void _debug(GWeb *web, const char *file, const char *caller,
 }
 
 /**
+ *  Return the GWeb error quark.
+ *
+ *  @returns
+ *    The GWeb error GQuark.
+ */
+G_DEFINE_QUARK(g-web-error-quark, g_web_error)
+
+/**
  *  @brief
  *    Invoke the closure callback associated with the web session
  *    request.
@@ -211,36 +212,84 @@ static void _debug(GWeb *web, const char *file, const char *caller,
  *    A pointer to the mutable web session request for which to invoke
  *    the closure callback.
  *
- *  @param[in]  err
- *    Operating system error to set in the @a session result
- *    structure.
+ *  @param[in]  error
+ *    An optional pointer to the immutable GError structure containing
+ *    information about an error that occurred during the GWeb request,
+ *    if any.
  *
- *  @param[in]  status
- *    HTTP status code on success to set in the @a session result
- *    structure. Note that #GWEB_HTTP_STATUS_CODE_UNKNOWN acts as a
- *    null value such that the status is only set if the value is
- *    not #GWEB_HTTP_STATUS_CODE_UNKNOWN.
- *
+ *  @sa call_result_func_failure
+ *  @sa call_result_func_success
  *  @sa do_request
  *
  *  @private
  *
  */
-static inline void call_result_func(struct web_session *session,
-					int err, guint16 status)
+static void call_result_func(struct web_session *session,
+					const GError *error)
 {
-	debug(session->web, "session %p err %d status %d result_func %p",
-		session, err, status, session->result_func);
+	debug(session->web, "session %p error %p result_func %p",
+		session, error, session->result_func);
 
 	if (!session->result_func)
 		return;
 
-	session->result.err = err;
+	session->result_func(error, &session->result, session->user_data);
+}
 
-	if (status != GWEB_HTTP_STATUS_CODE_UNKNOWN)
-		session->result.status = status;
+/**
+ *  @brief
+ *    Invoke the closure callback on failure associated with the web
+ *    session request.
+ *
+ *  This closes the specified web session request on failure with @a
+ *  error by invoking the @a result_func originally assigned in
+ *  #do_request when the session was first initiated.
+ *
+ *  @param[in]  session
+ *    A pointer to the mutable web session request for which to invoke
+ *    the closure callback.
+ *
+ *  @param[in]  error
+ *    A required pointer to the immutable GError structure containing
+ *    informatino about an error that occurred during the GWeb
+ *    request.
+ *
+ *  @sa call_result_func
+ *  @sa call_result_func_success
+ *  @sa do_request
+ *
+ *  @private
+ *
+ */
+static inline void call_result_func_failure(struct web_session *session,
+					const GError *error)
+{
+	call_result_func(session, error);
+}
 
-	session->result_func(&session->result, session->user_data);
+/**
+ *  @brief
+ *    Invoke the closure callback on success associated with the web
+ *    session request.
+ *
+ *  This closes the specified web session request on success by
+ *  invoking the @a result_func originally assigned in #do_request
+ *  when the session was first initiated.
+ *
+ *  @param[in]  session
+ *    A pointer to the mutable web session request for which to invoke
+ *    the closure callback.
+ *
+ *  @sa call_result_func
+ *  @sa call_result_func_failure
+ *  @sa do_request
+ *
+ *  @private
+ *
+ */
+static void call_result_func_success(struct web_session *session)
+{
+	call_result_func(session, NULL);
 }
 
 static inline void call_route_func(struct web_session *session)
@@ -274,9 +323,14 @@ static inline void call_route_func(struct web_session *session)
 static gboolean connect_timeout_cb(gpointer user_data)
 {
 	struct web_session *session = user_data;
+	g_autofree char *message = NULL;
+	g_autoptr(GError) local_error = NULL;
 
-	debug(session->web, "session %p connect timeout after %ums",
-			session, g_web_get_connect_timeout(session->web));
+	message = g_strdup_printf("connect timeout to %s after %ums",
+		session->address, g_web_get_connect_timeout(session->web));
+
+	debug(session->web, "session %p %s",
+			session, message);
 
 	session->connect_timeout = 0;
 
@@ -285,7 +339,11 @@ static gboolean connect_timeout_cb(gpointer user_data)
 	session->result.buffer = NULL;
 	session->result.length = 0;
 
-	call_result_func(session, -ETIMEDOUT, GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT);
+	local_error = g_error_new_literal(G_IO_ERROR,
+					G_IO_ERROR_TIMED_OUT,
+					message);
+
+	call_result_func_failure(session, local_error);
 
 	return G_SOURCE_REMOVE;
 }
@@ -862,8 +920,8 @@ static void start_request(struct web_session *session)
 {
 	GString *buf = session->send_buffer;
 	const char *version;
-	const guint8 *body;
-	gsize length;
+	const guint8 *body = NULL;
+	gsize length = 0;
 
 	debug(session->web, "request %s from %s",
 					session->request, session->host);
@@ -923,7 +981,7 @@ static void start_request(struct web_session *session)
 			g_string_append_printf(buf, "%zx\r\n", length);
 			g_string_append_len(buf, (char *) body, length);
 			g_string_append(buf, "\r\n");
-		} else if (session->fd == -1)
+		} else if (session->fd == -1 && body)
 			g_string_append_len(buf, (char *) body, length);
 	}
 }
@@ -1026,8 +1084,7 @@ static int decode_chunked(struct web_session *session,
 			if (session->chunk_left <= len) {
 				session->result.buffer = ptr;
 				session->result.length = session->chunk_left;
-				call_result_func(session, 0,
-					GWEB_HTTP_STATUS_CODE_UNKNOWN);
+				call_result_func_success(session);
 
 				len -= session->chunk_left;
 				ptr += session->chunk_left;
@@ -1042,8 +1099,7 @@ static int decode_chunked(struct web_session *session,
 			/* more data */
 			session->result.buffer = ptr;
 			session->result.length = len;
-			call_result_func(session, 0,
-				GWEB_HTTP_STATUS_CODE_UNKNOWN);
+			call_result_func_success(session);
 
 			session->chunk_left -= len;
 			session->total_len += len;
@@ -1061,6 +1117,8 @@ static int handle_body(struct web_session *session,
 				const guint8 *buf, gsize len)
 {
 	int err;
+	g_autofree char *message = NULL;
+	g_autoptr(GError) local_error = NULL;
 
 	debug(session->web, "[body] length %zu", len);
 
@@ -1068,19 +1126,25 @@ static int handle_body(struct web_session *session,
 		if (len > 0) {
 			session->result.buffer = buf;
 			session->result.length = len;
-			call_result_func(session, 0,
-				GWEB_HTTP_STATUS_CODE_UNKNOWN);
+			call_result_func_success(session);
 		}
 		return 0;
 	}
 
 	err = decode_chunked(session, buf, len);
 	if (err < 0) {
-		debug(session->web, "Error in chunk decode %d", err);
+		message = g_strdup_printf("Error in chunk decode %d", err);
+
+		debug(session->web, message);
 
 		session->result.buffer = NULL;
 		session->result.length = 0;
-		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+
+		local_error = g_error_new_literal(G_WEB_ERROR,
+			G_WEB_ERROR_CHUNK_DECODE,
+			message);
+
+		call_result_func_failure(session, local_error);
 	}
 
 	return err;
@@ -1166,76 +1230,6 @@ static void add_header_field(struct web_session *session)
 
 /**
  *  @brief
- *    Map a glib error into the negated POSIX error domain.
- *
- *  This attempts to map the specfied glib error into the negated
- *  POSIX error domain, defaulting to -EIO for unmapped domain/code
- *  pairs.
- *
- *  @param[in]  error  A pointer to the immutable glib error to map.
- *
- *  @returns
- *    A mapped glib error into the negated POSIX error domain.
- *
- */
-static int map_gerror(const GError *error)
-{
-	int err;
-
-	if (error->domain == G_CONVERT_ERROR) {
-		switch (error->code) {
-		case G_CONVERT_ERROR_NO_MEMORY:
-			err = -ENOMEM;
-			break;
-		case G_CONVERT_ERROR_ILLEGAL_SEQUENCE:
-			err = -EILSEQ;
-			break;
-		case G_CONVERT_ERROR_PARTIAL_INPUT:
-			err = -EBADMSG;
-			break;
-		default:
-			err = -EIO;
-			break;
-		}
-	} else if (error->domain == G_IO_CHANNEL_ERROR) {
-		switch (error->code) {
-		case G_IO_CHANNEL_ERROR_INVAL:
-			err = -EINVAL;
-			break;
-		case G_IO_CHANNEL_ERROR_FBIG:
-			err = -EFBIG;
-			break;
-		case G_IO_CHANNEL_ERROR_IO:
-			err = -EIO;
-			break;
-		case G_IO_CHANNEL_ERROR_ISDIR:
-			err = -EISDIR;
-			break;
-		case G_IO_CHANNEL_ERROR_NOSPC:
-			err = -ENOSPC;
-			break;
-		case G_IO_CHANNEL_ERROR_NXIO:
-			err = -ENXIO;
-			break;
-		case G_IO_CHANNEL_ERROR_OVERFLOW:
-			err = -EOVERFLOW;
-			break;
-		case G_IO_CHANNEL_ERROR_PIPE:
-			err = -EPIPE;
-			break;
-		default:
-			err = -EIO;
-			break;
-		}
-	} else {
-		err = -EIO;
-	}
-
-	return err;
-}
-
-/**
- *  @brief
  *    Finalize a glib I/O channel watch received data delegation for a
  *    web session request.
  *
@@ -1275,8 +1269,8 @@ static void received_data_finalize(struct web_session *session,
 				GIOStatus status, gsize bytes_available,
 				gsize bytes_read, const GError *error)
 {
-	int err = 0;
-	const guint16 code = GWEB_HTTP_STATUS_CODE_UNKNOWN;
+	g_autoptr(GError) local_error = NULL;
+	const GError *passed_error = NULL;
 
 	session->transport_watch = 0;
 
@@ -1286,8 +1280,9 @@ static void received_data_finalize(struct web_session *session,
 	/* Handle post-channel read errors, which could be either
 	 * G_IO_STATUS_ERROR or G_IO_STATUS_EOF.
 	 *
-	 * For G_IO_STATUS_ERROR, simply attempt to map the error from
-	 * GError, if available.
+	 * For G_IO_STATUS_ERROR, simply pass through the GError, if
+	 * non-null. If there is no GError, create a GError anew based on
+	 * EIO.
 	 *
 	 * For G_IO_STATUS_EOF, this could occur at the end of a nominal,
 	 * successful get. That is, some number of headers, with or
@@ -1296,7 +1291,7 @@ static void received_data_finalize(struct web_session *session,
 	 * of the remote peer server unexpectedly terminating the
 	 * connection without transferring any data at all. The only
 	 * reasonable recovery for this case it to fail the request,
-	 * synthesizing -ECONNRESET as the error, and to let the client
+	 * synthesizing ECONNRESET as the error, and to let the client
 	 * request again.
 	 *
 	 * If we asked for a non-zero amount of data but received none and
@@ -1307,17 +1302,25 @@ static void received_data_finalize(struct web_session *session,
 
 	if (status == G_IO_STATUS_ERROR) {
 		if (error != NULL)
-			err = map_gerror(error);
-		else
-			err = -EIO;
+			passed_error = error;
+		else {
+			local_error = g_error_new_literal(G_IO_ERROR,
+				g_io_error_from_errno(EIO),
+				g_strerror(EIO));
+			passed_error = local_error;
+		}
 	} else if (status == G_IO_STATUS_EOF) {
 		if (bytes_available > 0 &&
 				bytes_read == 0 &&
-				!g_web_result_has_headers(&session->result, NULL))
-			err = -ECONNRESET;
+				!g_web_result_has_headers(&session->result, NULL)) {
+			local_error = g_error_new_literal(G_IO_ERROR,
+				g_io_error_from_errno(ECONNRESET),
+				g_strerror(ECONNRESET));
+			passed_error = local_error;
+		}
 	}
 
-	call_result_func(session, err, code);
+	call_result_func_failure(session, passed_error);
 }
 
 /**
@@ -1458,7 +1461,8 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 	const gsize bytes_available = session->receive_space - 1;
 	gsize bytes_read;
 	GIOStatus status;
-	GError *error = NULL;
+	g_autoptr(GError) local_error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	/* We received some data or condition, cancel the connect timeout. */
 
@@ -1474,7 +1478,11 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 		session->result.buffer = NULL;
 		session->result.length = 0;
 
-		call_result_func(session, -EIO, GWEB_HTTP_STATUS_CODE_UNKNOWN);
+		local_error = g_error_new_literal(G_IO_ERROR,
+			g_io_error_from_errno(EIO),
+			g_strerror(EIO));
+
+		call_result_func_failure(session, local_error);
 
 		return FALSE;
 	}
@@ -1494,9 +1502,6 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 	if (status != G_IO_STATUS_NORMAL && status != G_IO_STATUS_AGAIN) {
 		received_data_finalize(session, status,
 			bytes_available, bytes_read, error);
-
-		if (error != NULL)
-			g_clear_error(&error);
 
 		return FALSE;
 	}
@@ -2494,8 +2499,9 @@ done:
 static void handle_resolved_address(struct web_session *session)
 {
 	struct addrinfo hints;
-	char *port;
+	g_autofree char *port;
 	int ret;
+	g_autoptr(GError) local_error = NULL;
 
 	debug(session->web, "address %s", session->address);
 
@@ -2510,17 +2516,27 @@ static void handle_resolved_address(struct web_session *session)
 
 	port = g_strdup_printf("%u", session->port);
 	ret = getaddrinfo(session->address, port, &hints, &session->addr);
-	g_free(port);
 	if (ret != 0 || !session->addr) {
-		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_BAD_REQUEST);
+		local_error = g_error_new(G_WEB_ERROR,
+			G_WEB_ERROR_HOST_NOT_FOUND,
+			"could not resolve %s: %s",
+			session->address,
+			gai_strerror(ret));
+
+		call_result_func_failure(session, local_error);
+
 		return;
 	}
 
 	call_route_func(session);
 
-	if (create_transport(session) < 0) {
-		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_CONFLICT);
-		return;
+	ret = create_transport(session);
+	if (ret < 0) {
+		local_error = g_error_new_literal(G_IO_ERROR,
+						g_io_error_from_errno(ret),
+						g_strerror(ret));
+
+		call_result_func_failure(session, local_error);
 	}
 }
 
@@ -2538,9 +2554,16 @@ static void resolv_result(GResolvResultStatus status,
 					char **results, gpointer user_data)
 {
 	struct web_session *session = user_data;
+	g_autoptr(GError) local_error = NULL;
 
 	if (!results || !results[0]) {
-		call_result_func(session, 0, GWEB_HTTP_STATUS_CODE_NOT_FOUND);
+		local_error = g_error_new(G_WEB_ERROR,
+				G_WEB_ERROR_HOST_NOT_FOUND,
+				"could not resolve %s",
+				session->host);
+
+		call_result_func_failure(session, local_error);
+
 		return;
 	}
 
@@ -2727,30 +2750,6 @@ bool g_web_cancel_request(GWeb *web, guint id)
 
 /**
  *  @brief
- *    Returns the operating system error, if any, associated with the
- *    web session request result.
- *
- *  @param[in]  result  A pointer to the immutable web session
- *                      request result for which to return the
- *                      operating system error.
- *
- *  @returns
- *    0 on success; otherwise, < 0 (negate to arrive at a POSIX
- *    domain error number).
- *
- *  @sa g_web_result_get_status
- *
- */
-int g_web_result_get_err(const GWebResult *result)
-{
-	if (!result)
-		return -EINVAL;
-
-	return result->err;
-}
-
-/**
- *  @brief
  *    Returns the HTTP status code, if any, associated with the
  *    web session request result.
  *
@@ -2760,8 +2759,6 @@ int g_web_result_get_err(const GWebResult *result)
  *
  *  @returns
  *    The HTTP status code.
- *
- *  @sa g_web_result_get_err
  *
  */
 guint16 g_web_result_get_status(GWebResult *result)

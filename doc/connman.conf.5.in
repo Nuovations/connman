@@ -107,7 +107,7 @@ List of blacklisted network interfaces separated by ",".
 Found interfaces will be compared to the list and will
 not be handled by connman, if their first characters
 match any of the list entries. Default value is
-vmnet,vboxnet,virbr,ifb.
+vmnet,vboxnet,virbr,ifb,ve-,vb-,ham,veth.
 .TP
 .BI AllowHostnameUpdates=true\ \fR|\fB\ false
 Allow connman to change the system hostname. This can
@@ -266,41 +266,6 @@ Default value is \fBfalse\fR.
 \fBNOTE:\fR \fBEnableOnlineToReadyTransition\fR is deprecated; please use
 \fBOnlineCheckMode\fR with a mode of either \fBcontinuous\fR or
 \fBnone\fR.
-.TP
-.BI OnlineCheckFailuresThreshold= failures
-When \fBOnlineCheckMode\fR is "continuous", this is the number of
-failed back-to-back "ready" to "online" HTTP-based Internet
-reachability checks that will be allowed before marking a service as
-"failed" from a reachability perspective, sorting it at a lower
-priority than other services not so marked.
-
-Lower values may result in higher-frequency network service cycling
-while higher values may result in a longer period of time before
-failing from a non-Internet reachable service to one that might be.
-
-See \fBOnlineCheckIntervalStyle\fR, \fBOnlineCheckInitialInterval\fR, and
-\fBOnlineCheckMaxInterval\fR for other values that influence network
-service failure/recovery transition time.
-The default value is 6.
-.TP
-.BI OnlineCheckSuccessesThreshold= successes
-When \fBOnlineCheckMode\fR is "continuous", this is the number of
-successful back-to-back "ready" to "online" HTTP-based Internet
-reachability checks that must be met before clearing a service as
-"failed" from a reachability perspective and allowing it to transition
-to the "online" state again, allowing it to sort back to a higher
-priority relative to other network services.
-
-Lower values may result in higher-frequency network service cycling
-while higher values may result in a longer period of time before
-transitioning back to more a preferred, Internet reachable network
-service.
-
-See \fBOnlineCheckIntervalStyle\fR, \fBOnlineCheckInitialInterval\fR, and
-\fBOnlineCheckMaxInterval\fR for other values that influence network
-service failure/recovery transition time.
-
-The default value is 6.
 .TP
 .BI OnlineCheckFailuresThreshold= failures
 When \fBOnlineCheckMode\fR is "continuous", this is the number of

@@ -133,7 +133,7 @@ struct connman_wispr_portal {
 	struct connman_wispr_portal_context *ipv6_context;
 };
 
-static bool wispr_portal_web_result(GWebResult *result, gpointer user_data);
+static bool wispr_portal_web_result(const GError *error, GWebResult *result, gpointer user_data);
 
 /**
  *  A dictionary / hash table of network interface indices to
@@ -652,10 +652,13 @@ static void wispr_portal_error(struct connman_wispr_portal_context *wp_context)
  *                              associated with the unsuccessful
  *                              "online" HTTP-based Internet
  *                              reachability check.
+ *  @param[in]      message     A pointer to an immutable null-
+ *                              terminated C string describing the
+ *                              reason for the online check failure.
  *
  *  @sa portal_manage_success_status
- *  @sa wispr_portal_web_result_no_err
- *  @sa wispr_portal_web_result_err
+ *  @sa wispr_portal_web_result_failure
+ *  @sa wispr_portal_web_result_success
  *  @sa wispr_portal_web_result
  *
  *  @private
@@ -663,12 +666,13 @@ static void wispr_portal_error(struct connman_wispr_portal_context *wp_context)
  */
 static void portal_manage_failure_status(
 			struct connman_wispr_portal_context *wp_context,
-			int err)
+			int err,
+			const char *message)
 {
 	struct connman_service *service = wp_context->service;
 	enum connman_ipconfig_type type = wp_context->type;
 
-	wp_context->cb(service, type, false, err);
+	wp_context->cb(service, type, false, err, message);
 }
 
 /**
@@ -720,7 +724,7 @@ static void portal_manage_success_status(GWebResult *result,
 				&str))
 		connman_info("Client-Timezone: %s", str);
 
-	wp_context->cb(service, type, true, 0);
+	wp_context->cb(service, type, true, 0, NULL);
 }
 
 static bool wispr_route_request(const char *address, int ai_family,
@@ -810,10 +814,11 @@ static void wispr_portal_request_portal(
 					wispr_route_request,
 					wp_context, &err);
 
-	DBG("wp_context->request_id %d err %d", wp_context->request_id, err);
+	DBG("wp_context->request_id %d err %d",
+		wp_context->request_id, err);
 
 	if (wp_context->request_id == 0) {
-		portal_manage_failure_status(wp_context, err);
+		portal_manage_failure_status(wp_context, -err, strerror(-err));
 		wispr_portal_error(wp_context);
 		wispr_portal_context_unref(wp_context);
 	}
@@ -1008,6 +1013,9 @@ static bool wispr_manage_message(GWebResult *result,
  *    Handle closure and finalization of a web request associated with
  *    an unsuccessful "online" HTTP-based Internet reachability check.
  *
+ *  @param[in]      error       A pointer to the immutable GLib GError
+ *                              instance associated the web request
+ *                              failure.
  *  @param[in]      result      A pointer to the mutable web request
  *                              result being finalized.
  *  @param[in,out]  wp_context  A pointer to the mutable WISPr portal
@@ -1015,22 +1023,18 @@ static bool wispr_manage_message(GWebResult *result,
  *                              unsuccessful "online" HTTP-based
  *                              Internet reachability check this is
  *                              finalizing.
- *  @param[in]      err         The negated POSIX domain error
- *                              associated with the unsuccessful
- *                              "online" HTTP-based Internet
- *                              reachability check.
  *
  *  @sa wispr_portal_web_result
- *  @sa wispr_portal_web_result_no_err
+ *  @sa wispr_portal_web_result_success
  *
  *  @private
  *
  */
-static void wispr_portal_web_result_err(GWebResult *result,
-		struct connman_wispr_portal_context *wp_context,
-		int err)
+static void wispr_portal_web_result_failure(const GError *error,
+		GWebResult *result,
+		struct connman_wispr_portal_context *wp_context)
 {
-	portal_manage_failure_status(wp_context, err);
+	portal_manage_failure_status(wp_context, 0, error->message);
 
 	free_wispr_routes(wp_context);
 	wp_context->request_id = 0;
@@ -1050,12 +1054,12 @@ static void wispr_portal_web_result_err(GWebResult *result,
  *                              finalizing.
  *
  *  @sa wispr_portal_web_result
- *  @sa wispr_portal_web_result_no_err
+ *  @sa wispr_portal_web_result_failure
  *
  *  @private
  *
  */
-static void wispr_portal_web_result_no_err(GWebResult *result,
+static void wispr_portal_web_result_success(GWebResult *result,
 		struct connman_wispr_portal_context *wp_context)
 {
 	guint16 status;
@@ -1064,7 +1068,7 @@ static void wispr_portal_web_result_no_err(GWebResult *result,
 
 	status = g_web_result_get_status(result);
 
-	connman_info("status: %03u", status);
+	DBG("status: %03u", status);
 
 	switch (status) {
 	case GWEB_HTTP_STATUS_CODE_UNKNOWN:
@@ -1114,17 +1118,17 @@ static void wispr_portal_web_result_no_err(GWebResult *result,
 				redirect, wispr_portal_web_result,
 				wispr_route_request, wp_context, NULL);
 
-		goto done;
+		return;
 	case GWEB_HTTP_STATUS_CODE_BAD_REQUEST:
-		portal_manage_failure_status(wp_context, -EINVAL);
+		portal_manage_failure_status(wp_context, 0, "bad request");
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_NOT_FOUND:
-		portal_manage_failure_status(wp_context, -ENOENT);
+		portal_manage_failure_status(wp_context, 0, "resource not found");
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_REQUEST_TIMEOUT:
-		portal_manage_failure_status(wp_context, -ETIMEDOUT);
+		portal_manage_failure_status(wp_context, 0, "request timeout");
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_HTTP_VERSION_NOT_SUPPORTED:
@@ -1133,16 +1137,12 @@ static void wispr_portal_web_result_no_err(GWebResult *result,
 				wispr_portal_browser_reply_cb,
 				wp_context->status_url, wp_context);
 		break;
-
 	default:
 		break;
 	}
 
 	free_wispr_routes(wp_context);
 	wp_context->request_id = 0;
-
-done:
-	return;
 }
 
 /**
@@ -1153,6 +1153,9 @@ done:
  *  This handles the receipt of new data associated with @a result and
  *  the potential closure and finalization of it, if appropriate.
  *
+ *  @param[in]      error      An optional pointer to the immutable
+ *                             GLib GError instance associated the web
+ *                             request, if it failed.
  *  @param[in]      result     A pointer to the mutable web request
  *                             result with data to process or to be
  *                             finalized.
@@ -1165,22 +1168,22 @@ done:
  *    True if web request should wait for and process further data;
  *    otherwise, false.
  *
- *  @sa wispr_portal_web_result_err
- *  @sa wispr_portal_web_result_no_err
+ *  @sa wispr_portal_web_result_failure
+ *  @sa wispr_portal_web_result_success
  *  @sa wispr_manage_message
  *
  *  @private
  *
  */
-static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
+static bool wispr_portal_web_result(const GError *error, GWebResult *result,
+		gpointer user_data)
 {
 	struct connman_wispr_portal_context *wp_context = user_data;
 	const guint8 *chunk = NULL;
-	int err;
 	gsize length;
 
-	DBG("result %p user_data %p wispr_result %d",
-		result, user_data, wp_context->wispr_result);
+	DBG("error %p result %p user_data %p wispr_result %d",
+		error, result, user_data, wp_context->wispr_result);
 
 	if (wp_context->wispr_result != CONNMAN_WISPR_RESULT_ONLINE) {
 		g_web_result_get_chunk(result, &chunk, &length);
@@ -1196,7 +1199,8 @@ static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
 
 		g_web_parser_end_data(wp_context->wispr_parser);
 
-		DBG("wp_context->wispr_msg.message_type %d", wp_context->wispr_msg.message_type);
+		DBG("wp_context->wispr_msg.message_type %d",
+			wp_context->wispr_msg.message_type);
 
 		if (wp_context->wispr_msg.message_type >= 0) {
 			if (wispr_manage_message(result, wp_context))
@@ -1204,19 +1208,10 @@ static bool wispr_portal_web_result(GWebResult *result, gpointer user_data)
 		}
 	}
 
-	/* Check whether there was an operating system error while
-	 * processing the web request associated with the "online"
-	 * HTTP-based Internet reachability check.
-	 */
-
-	err = g_web_result_get_err(result);
-
-	DBG("err %d", err);
-
-	if (err < 0)
-		wispr_portal_web_result_err(result, wp_context, err);
+	if (error)
+		wispr_portal_web_result_failure(error, result, wp_context);
 	else
-		wispr_portal_web_result_no_err(result, wp_context);
+		wispr_portal_web_result_success(result, wp_context);
 
 done:
 	wp_context->wispr_msg.message_type = -1;
@@ -1227,7 +1222,6 @@ done:
 	 * maintaining a weak reference to it.
 	 */
 	wispr_portal_context_unref(wp_context);
-
 	return false;
 }
 
@@ -1307,7 +1301,7 @@ static void proxy_callback(const char *proxy, void *user_data)
 	if (!proxy) {
 		wispr_log_proxy_failure(wp_context, "No valid proxy");
 
-		portal_manage_failure_status(wp_context, -EINVAL);
+		portal_manage_failure_status(wp_context, 0, "no valid proxy");
 
 		return;
 	}
@@ -1654,7 +1648,7 @@ int __connman_wispr_start(struct connman_service *service,
 free_wp:
 	DBG("err %d wp_context %p", err, wp_context);
 
-	portal_manage_failure_status(wp_context, err);
+	portal_manage_failure_status(wp_context, -err, strerror(-err));
 
 	g_hash_table_remove(wispr_portal_hash, GINT_TO_POINTER(index));
 	return err;
@@ -1740,7 +1734,8 @@ int __connman_wispr_cancel(struct connman_service *service,
 
 	cancel_connman_wispr_portal_context(wp_context);
 
-	portal_manage_failure_status(wp_context, -ECANCELED);
+	portal_manage_failure_status(wp_context, -ECANCELED,
+		strerror(ECANCELED));
 
 	wispr_portal_context_unref(wp_context);
 

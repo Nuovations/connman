@@ -492,7 +492,7 @@ static bool wispr_route(const char *addr, int ai_family, int if_index,
 	return true;
 }
 
-static bool wispr_result(GWebResult *result, gpointer user_data)
+static bool wispr_result(const GError *error, GWebResult *result, gpointer user_data)
 {
 	struct wispr_session *wispr = user_data;
 	const guint8 *chunk;
