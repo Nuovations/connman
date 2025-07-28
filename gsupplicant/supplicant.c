@@ -4955,22 +4955,9 @@ static void add_network_security(DBusMessageIter *dict, GSupplicantSSID *ssid)
 		add_network_security_ciphers(dict, ssid);
 		break;
 	case G_SUPPLICANT_SECURITY_PSK:
-		if (ssid->keymgmt & G_SUPPLICANT_KEYMGMT_SAE) {
-			if (ssid->keymgmt & G_SUPPLICANT_KEYMGMT_WPA_PSK) {
-				/*
-				 * WPA3-Personal transition mode: supports both
-				 * WPA2-Personal (PSK) and WPA3-Personal (SAE)
-				 */
-				key_mgmt = "SAE WPA-PSK";
-				ieee80211w = G_SUPPLICANT_MFP_OPTIONAL;
-			} else {
-				key_mgmt = "SAE";
-				ieee80211w = G_SUPPLICANT_MFP_REQUIRED;
-			}
-			add_network_ieee80211w(dict, ssid, ieee80211w);
-		} else {
-			key_mgmt = "WPA-PSK";
-		}
+		key_mgmt = "SAE WPA-PSK WPA-PSK-SHA256";
+		ieee80211w = G_SUPPLICANT_MFP_OPTIONAL;
+		add_network_ieee80211w(dict, ssid, ieee80211w);
 		add_network_security_psk(dict, ssid);
 		add_network_security_ciphers(dict, ssid);
 		add_network_security_proto(dict, ssid);

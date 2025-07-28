@@ -101,6 +101,22 @@ enum GWebStatusCode {
 	GWEB_HTTP_STATUS_CODE_NETWORK_AUTHENTICATION_REQUIRED = 511
 };
 
+/**
+ *  GWeb-specific error enumerations potentially set when
+ *  #GWebResultFunc is invoked on a failure.
+ */
+enum GWebErrorEnum {
+	/**
+	 *  An error occorred when decoding a chunked HTTP response.
+	 */
+	G_WEB_ERROR_CHUNK_DECODE,
+
+	/**
+	 *  A host could not be resolved.
+	 */
+	G_WEB_ERROR_HOST_NOT_FOUND,
+};
+
 struct _GWeb;
 struct _GWebResult;
 struct _GWebParser;
@@ -109,7 +125,7 @@ typedef struct _GWeb GWeb;
 typedef struct _GWebResult GWebResult;
 typedef struct _GWebParser GWebParser;
 
-typedef bool (*GWebResultFunc)(GWebResult *result, gpointer user_data);
+typedef bool (*GWebResultFunc)(const GError *error, GWebResult *result, gpointer user_data);
 
 typedef bool (*GWebRouteFunc)(const char *addr, int ai_family,
 		int if_index, gpointer user_data);
@@ -118,6 +134,8 @@ typedef bool (*GWebInputFunc)(const guint8 **data, gsize *length,
 							gpointer user_data);
 
 typedef void (*GWebDebugFunc)(const char *str, gpointer user_data);
+
+#define G_WEB_ERROR g_web_error_quark()
 
 GWeb *g_web_new(int index);
 
@@ -162,7 +180,6 @@ guint g_web_request_post_file(GWeb *web, const char *url,
 
 bool g_web_cancel_request(GWeb *web, guint id);
 
-int g_web_result_get_err(const GWebResult *result);
 guint16 g_web_result_get_status(GWebResult *result);
 
 bool g_web_result_get_header(GWebResult *result,
@@ -183,6 +200,8 @@ void g_web_parser_unref(GWebParser *parser);
 void g_web_parser_feed_data(GWebParser *parser,
 				const guint8 *data, gsize length);
 void g_web_parser_end_data(GWebParser *parser);
+
+GQuark g_web_error_quark(void);
 
 #ifdef __cplusplus
 }

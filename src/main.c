@@ -91,6 +91,7 @@ static char *default_blacklist[] = {
 	"ve-",
 	"vb-",
 	"ham",
+	"veth",
 	NULL
 };
 

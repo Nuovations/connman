@@ -233,7 +233,8 @@ static gboolean unref_web(gpointer user_data)
 	return FALSE;
 }
 
-static bool web_result(GWebResult *result, gpointer user_data)
+static bool web_result(const GError *error,
+		GWebResult *result, gpointer user_data)
 {
 	guint16 status;
 
