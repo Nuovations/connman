@@ -1201,7 +1201,7 @@ static void add_header_field(struct web_session *session)
 		*pos = '\0';
 		pos++;
 
-		key = g_strdup(str);
+		key = g_ascii_strdown(str, -1);
 
 		/* remove preceding white spaces */
 		while (*pos == ' ')
@@ -1390,7 +1390,7 @@ static bool received_data_continue(struct web_session *session,
 			session->header_done = true;
 
 			val = g_hash_table_lookup(session->result.headers,
-							"Transfer-Encoding");
+							"transfer-encoding");
 			if (val) {
 				val = g_strrstr(val, "chunked");
 				if (val) {
@@ -2789,13 +2789,26 @@ bool g_web_result_get_chunk(GWebResult *result,
 bool g_web_result_get_header(GWebResult *result,
 				const char *header, const char **value)
 {
+	const char *p;
+	gchar *lower = NULL;
+
 	if (!result)
 		return false;
 
 	if (!value)
 		return false;
 
-	*value = g_hash_table_lookup(result->headers, header);
+	p = header;
+	while (*p && !g_ascii_isupper(*p))
+		p++;
+
+	if (!*p) {
+		*value = g_hash_table_lookup(result->headers, header);
+	} else {
+		lower = g_ascii_strdown(header, -1);
+		*value = g_hash_table_lookup(result->headers, lower);
+		g_free(lower);
+	}
 
 	if (!*value)
 		return false;
