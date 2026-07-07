@@ -708,19 +708,19 @@ static void portal_manage_success_status(GWebResult *result,
 	DBG("");
 
 	/* We currently don't do anything with this info */
-	if (g_web_result_get_header(result, "X-ConnMan-Client-IP",
+	if (g_web_result_get_header(result, "x-connman-client-ip",
 				&str))
 		connman_info("Client-IP: %s", str);
 
-	if (g_web_result_get_header(result, "X-ConnMan-Client-Country",
+	if (g_web_result_get_header(result, "x-connman-client-country",
 				&str))
 		connman_info("Client-Country: %s", str);
 
-	if (g_web_result_get_header(result, "X-ConnMan-Client-Region",
+	if (g_web_result_get_header(result, "x-connman-client-region",
 				&str))
 		connman_info("Client-Region: %s", str);
 
-	if (g_web_result_get_header(result, "X-ConnMan-Client-Timezone",
+	if (g_web_result_get_header(result, "x-connman-client-timezone",
 				&str))
 		connman_info("Client-Timezone: %s", str);
 
@@ -1081,7 +1081,7 @@ static void wispr_portal_web_result_success(GWebResult *result,
 		if (wp_context->wispr_msg.message_type >= 0)
 			break;
 
-		if (g_web_result_get_header(result, "X-ConnMan-Status",
+		if (g_web_result_get_header(result, "x-connman-status",
 						&str)) {
 			portal_manage_success_status(result, wp_context);
 		} else {
@@ -1099,7 +1099,7 @@ static void wispr_portal_web_result_success(GWebResult *result,
 	case GWEB_HTTP_STATUS_CODE_TEMPORARY_REDIRECT:
 	case GWEB_HTTP_STATUS_CODE_PERMANENT_REDIRECT:
 		if (!g_web_supports_tls() ||
-			!g_web_result_get_header(result, "Location",
+			!g_web_result_get_header(result, "location",
 							&redirect)) {
 
 			wispr_portal_context_ref(wp_context);
