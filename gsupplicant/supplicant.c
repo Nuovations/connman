@@ -3690,7 +3690,7 @@ void g_supplicant_interface_cancel(GSupplicantInterface *interface)
 
 struct supplicant_regdom {
 	GSupplicantCountryCallback callback;
-	const char *alpha2;
+	char *alpha2;
 	const void *user_data;
 };
 
@@ -3714,6 +3714,7 @@ static void country_result(const char *error,
 		regdom->callback(result, regdom->alpha2,
 					(void *) regdom->user_data);
 
+	g_free(regdom->alpha2);
 	g_free(regdom);
 }
 
@@ -3742,7 +3743,7 @@ int g_supplicant_set_country(const char *alpha2,
 		return -ENOMEM;
 
 	regdom->callback = callback;
-	regdom->alpha2 = alpha2;
+	regdom->alpha2 = g_strdup(alpha2);
 	regdom->user_data = user_data;
 
 	ret =  supplicant_dbus_property_set(SUPPLICANT_PATH, SUPPLICANT_INTERFACE,
@@ -3750,6 +3751,7 @@ int g_supplicant_set_country(const char *alpha2,
 					country_params, country_result,
 					regdom, NULL);
 	if (ret < 0) {
+		g_free(regdom->alpha2);
 		dbus_free(regdom);
 		SUPPLICANT_DBG("Unable to set Country configuration");
 	}
@@ -3769,7 +3771,7 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 		return -ENOMEM;
 
 	regdom->callback = callback;
-	regdom->alpha2 = alpha2;
+	regdom->alpha2 = g_strdup(alpha2);
 	regdom->user_data = user_data;
 
 	ret =  supplicant_dbus_property_set(interface->path,
@@ -3778,6 +3780,7 @@ int g_supplicant_interface_set_country(GSupplicantInterface *interface,
 				country_params, country_result,
 					regdom, NULL);
 	if (ret < 0) {
+		g_free(regdom->alpha2);
 		dbus_free(regdom);
 		SUPPLICANT_DBG("Unable to set Country configuration");
 	}
