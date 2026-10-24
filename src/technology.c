@@ -289,6 +289,8 @@ static int set_tethering(struct connman_technology *technology,
 void connman_technology_regdom_notify(struct connman_technology *technology,
 							const char *alpha2)
 {
+	char *regdom;
+
 	DBG("");
 
 	if (!alpha2)
@@ -296,8 +298,13 @@ void connman_technology_regdom_notify(struct connman_technology *technology,
 	else
 		DBG("Regulatory domain set to %s", alpha2);
 
+	/*
+	 * alpha2 may be technology->regdom itself, so copy it before
+	 * freeing the old value.
+	 */
+	regdom = g_strdup(alpha2);
 	g_free(technology->regdom);
-	technology->regdom = g_strdup(alpha2);
+	technology->regdom = regdom;
 }
 
 static int set_regdom_by_device(struct connman_technology *technology,
