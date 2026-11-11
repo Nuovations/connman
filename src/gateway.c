@@ -3957,7 +3957,8 @@ bool __connman_gateway_update(void)
 			status = DEMOTE_DEFAULT_GATEWAY(current_gateway,
 						type);
 
-			updated4 = status == 0;
+			if (status == 0)
+				updated4 = true;
 		}
 
 		type = CONNMAN_IPCONFIG_TYPE_IPV6;
@@ -3969,7 +3970,8 @@ bool __connman_gateway_update(void)
 			status = DEMOTE_DEFAULT_GATEWAY(current_gateway,
 						type);
 
-			updated6 = status == 0;
+			if (status == 0)
+				updated6 = true;
 		}
 	}
 
