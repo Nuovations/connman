@@ -439,7 +439,8 @@ static void technology_load(struct connman_technology *technology)
 	bool enable, need_saving = false, enable_persistent = false;
 	char *enc;
 	int i;
-	unsigned int *enabled_types;
+	unsigned int *enabled_types =
+		connman_setting_get_uint_list("DefaultEnabledTechnologies");
 
 	DBG("technology %p", technology);
 

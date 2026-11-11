@@ -73,9 +73,9 @@ struct dundee_data {
 	DBusPendingCall *call;
 };
 
-static char *get_ident(const char *path)
+static const char *get_ident(const char *path)
 {
-	char *pos;
+	const char *pos;
 
 	if (*path != '/')
 		return NULL;

@@ -160,9 +160,9 @@ static const char *get_string(struct connman_provider *provider,
 	return g_hash_table_lookup(data->setting_strings, key);
 }
 
-static char *get_ident(const char *path)
+static const char *get_ident(const char *path)
 {
-	char *pos;
+	const char *pos;
 
 	if (*path != '/')
 		return NULL;
@@ -665,7 +665,7 @@ static void add_connection(const char *path, DBusMessageIter *properties,
 {
 	struct connection_data *data;
 	int err;
-	char *ident = get_ident(path);
+	const char *ident = get_ident(path);
 	bool found = false;
 
 	data = g_hash_table_lookup(vpn_connections, ident);
@@ -1092,7 +1092,7 @@ static void configuration_create_reply(DBusPendingCall *call, void *user_data)
 	DBusMessageIter iter;
 	const char *signature = DBUS_TYPE_OBJECT_PATH_AS_STRING;
 	const char *path;
-	char *ident;
+	const char *ident;
 	struct connection_data *data;
 	struct config_create_data *cb_data = user_data;
 

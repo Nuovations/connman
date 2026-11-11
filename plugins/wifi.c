@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <net/ethernet.h>
@@ -1773,7 +1774,8 @@ static int get_latest_connections(int max_ssids,
 	for (i = 0; i < num_ssids; i++) {
 		entry = g_sequence_get(iter);
 
-		DBG("ssid %s freq %d modified %lu", entry->ssid, entry->freq,
+		DBG("ssid %s freq %d modified %"PRId64"",
+						entry->ssid, entry->freq,
 						entry->modified.tv_sec);
 
 		add_scan_param(entry->ssid, NULL, 0, entry->freq, scan_data,

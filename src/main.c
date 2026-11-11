@@ -78,7 +78,7 @@ static char *default_auto_connect[] = {
 	NULL
 };
 
-static char * default_enabled_techs[] = {
+static char *default_enabled_techs[] = {
 	"ethernet",
 	NULL
 };
@@ -503,7 +503,8 @@ static void parse_config(GKeyFile *config, const char *file)
 			parse_service_types(str_list, len);
 	else
 		connman_settings.enabled_techs =
-			parse_service_types(default_enabled_techs, CONF_ARRAY_SIZE(default_enabled_techs));
+			parse_service_types(default_enabled_techs,
+				CONF_ARRAY_SIZE(default_enabled_techs));
 
 	g_strfreev(str_list);
 

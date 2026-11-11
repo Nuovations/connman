@@ -1648,9 +1648,9 @@ static void connection_removed_signal(struct vpn_provider *provider)
 	dbus_message_unref(signal);
 }
 
-static char *get_ident(const char *path)
+static const char *get_ident(const char *path)
 {
-	char *pos;
+	const char *pos;
 
 	if (*path != '/')
 		return NULL;
@@ -1665,7 +1665,7 @@ static char *get_ident(const char *path)
 int __vpn_provider_remove(const char *path)
 {
 	struct vpn_provider *provider;
-	char *ident;
+	const char *ident;
 
 	DBG("path %s", path);
 

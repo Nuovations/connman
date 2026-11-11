@@ -1,3 +1,8 @@
+ver 2.0:
+	Fix issue with agent request on NoReply D-Bus error.
+	Add support for DefaultEnabledTechnologies setting.
+	Remove installation of include headers.
+
 ver 1.45:
 	Fix issue with setting MFP optional for PSK.
 	Fix issue with comparison in timezone checking.

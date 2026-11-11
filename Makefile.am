@@ -1,30 +1,29 @@
 
 AM_MAKEFLAGS = --no-print-directory
 
+ACLOCAL_AMFLAGS = -I build-aux
+
 noinst_LTLIBRARIES =
 
-includedir = @includedir@/connman
-
-include_HEADERS = include/log.h include/plugin.h \
+noinst_HEADERS = include/log.h include/plugin.h \
 			include/notifier.h include/service.h \
 			include/resolver.h include/ipconfig.h \
 			include/device.h include/network.h include/inet.h \
 			include/storage.h include/provision.h \
 			include/session.h include/ipaddress.h include/agent.h \
 			include/inotify.h include/peer.h include/machine.h \
-			include/acd.h include/tethering.h
-
-nodist_include_HEADERS = include/version.h
-
-noinst_HEADERS = include/rtnl.h include/task.h \
+			include/acd.h include/tethering.h \
+			include/rtnl.h include/task.h \
 			include/dbus.h \
 			include/provider.h include/vpn-dbus.h \
 			include/utsname.h include/timeserver.h include/proxy.h \
 			include/technology.h include/setting.h \
 			include/backtrace.h
 
-local_headers = $(foreach file,$(include_HEADERS) $(nodist_include_HEADERS) \
-			$(noinst_HEADERS), include/connman/$(notdir $(file)))
+nodist_noinst_HEADERS = include/version.h
+
+local_headers = $(foreach file,$(noinst_HEADERS) $(nodist_noinst_HEADERS), \
+					include/connman/$(notdir $(file)))
 
 
 noinst_LTLIBRARIES += gdbus/libgdbus-internal.la
@@ -325,7 +324,7 @@ unit_test_ippool_LDADD = gdbus/libgdbus-internal.la \
 				@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
-			$(top_srcdir)/tap-driver.sh
+			$(top_srcdir)/build-aux/tap-driver.sh
 
 TESTS = unit/test-ippool
 
@@ -488,10 +487,6 @@ MANUAL_PAGES += doc/connmanctl.1 doc/connman.conf.5 \
 
 nodist_man_MANS = $(MANUAL_PAGES)
 
-pkgconfigdir = $(libdir)/pkgconfig
-
-pkgconfig_DATA = connman.pc
-
 DISTCHECK_CONFIGURE_FLAGS = --disable-datafiles \
 				--enable-hh2serial-gps \
 				--enable-openconnect \
@@ -500,8 +495,6 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-datafiles \
 				--enable-session-policy-local \
 				--enable-nmcompat \
 				--enable-polkit
-
-DISTCLEANFILES = $(pkgconfig_DATA)
 
 MAINTAINERCLEANFILES = Makefile.in \
 	aclocal.m4 configure config.h.in config.sub config.guess tap-driver.sh \
@@ -587,6 +580,9 @@ include/connman/version.h: include/version.h
 include/connman/%.h: $(abs_top_srcdir)/include/%.h
 	$(AM_V_at)$(MKDIR_P) include/connman
 	$(AM_V_GEN)$(LN_S) $< $@
+
+maintainer-clean-local:
+	-rm -rf build-aux
 
 clean-local:
 	@$(RM) -rf include/connman $(MANUAL_PAGES)
