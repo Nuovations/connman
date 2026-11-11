@@ -186,9 +186,9 @@ static const char *api2string(enum ofono_api api)
 	return "unknown";
 }
 
-static char *get_ident(const char *path)
+static const char *get_ident(const char *path)
 {
-	char *pos;
+	const char *pos;
 
 	if (*path != '/')
 		return NULL;

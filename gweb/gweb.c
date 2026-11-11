@@ -1025,7 +1025,7 @@ static int decode_chunked(struct web_session *session,
 	gsize counter;
 
 	while (len > 0) {
-		guint8 *pos;
+		const guint8 *pos;
 		gsize count;
 		char *str;
 
@@ -2917,7 +2917,7 @@ void g_web_parser_feed_data(GWebParser *parser,
 		guint8 chr = parser->token_str[parser->token_pos];
 
 		if (parser->token_pos == 0) {
-			guint8 *pos;
+			const guint8 *pos;
 
 			pos = memchr(ptr, chr, length);
 			if (!pos) {

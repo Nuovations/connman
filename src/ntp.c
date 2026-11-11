@@ -385,7 +385,7 @@ static void decode_msg(struct ntp_data *nd, void *base, size_t len,
 		return;
 	}
 
-	DBG("interval/delta/delay/drift %fs/%+.3fs/%.3fs/%+ldppm",
+	DBG("interval/delta/delay/drift %fs/%+.3fs/%.3fs/%+"PRId64"ppm",
 		LOGTOD(msg->poll), offset, delay, tmx.freq / 65536);
 
 	nd->cb(true, nd->user_data);

@@ -273,7 +273,7 @@ int __connmanctl_input_init(int argc, char *argv[])
 		__connmanctl_monitor_completions(NULL);
 
 		rl_callback_handler_remove();
-		rl_message("");
+		rl_message("%s", "");
 	}
 
 	dbus_connection_unref(connection);

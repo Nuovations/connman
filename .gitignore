@@ -23,10 +23,9 @@ libtool
 ltmain.sh
 missing
 stamp-h1
+build-aux
 autom4te.cache
 test-driver
-m4/
-!m4/configmake.m4
 TAGS
 cscope.*
 tap-driver.sh

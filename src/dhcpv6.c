@@ -1431,8 +1431,8 @@ int __connman_dhcpv6_start_renew(struct connman_network *network,
 
 	current = time(NULL);
 
-	DBG("T1 %u T2 %u expires %lu current %lu started %lu", T1, T2,
-		(unsigned long)expired, current, started);
+	DBG("T1 %u T2 %u expires %"PRId64" current %"PRId64" started %"PRId64"",
+					T1, T2, expired, current, started);
 
 	if (T1 == 0xffffffff)
 		/* RFC 3315, 22.4 */
@@ -2315,8 +2315,8 @@ int __connman_dhcpv6_start_pd_renew(struct connman_network *network,
 
 	current = time(NULL);
 
-	DBG("T1 %u T2 %u expires %lu current %lu started %lu", T1, T2,
-		expired, current, started);
+	DBG("T1 %u T2 %u expires %"PRId64" current %"PRId64" started %"PRId64"",
+					T1, T2, expired, current, started);
 
 	if (T1 == 0xffffffff)
 		/* RFC 3633, ch 9 */

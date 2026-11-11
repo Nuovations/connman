@@ -8299,9 +8299,9 @@ static gint service_compare_vpn(const struct connman_service *a,
  *                         to compare by its technology type with the
  *                         @a PreferredTechnologies priority list.
  *
- *  @retval   0  If the @a PreferredTechnologies configuration is empty
- *               or if neither service type matches a technology type
- *               in the @a PreferredTechnologies list.
+ *  @retval   0  If neither service type appears in the
+ *               @a PreferredTechnologies list (including when
+ *               it is empty), or if the two service types are equal.
  *  @retval  -1  If @a service_a type matches a technology type
  *               in the @a PreferredTechnologies list and should sort
  *               @b before @a service_b.
@@ -8317,7 +8317,7 @@ static gint service_compare_preferred(const struct connman_service *service_a,
 	int i;
 
 	tech_array = connman_setting_get_uint_list("PreferredTechnologies");
-	if (tech_array) {
+	if (tech_array && service_a->type != service_b->type) {
 		for (i = 0; tech_array[i]; i++) {
 			if (tech_array[i] == service_a->type)
 				return -1;
