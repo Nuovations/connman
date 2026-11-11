@@ -110,6 +110,7 @@ struct web_session {
 
 	GIOChannel *transport_channel;
 	guint connect_timeout;
+	guint inactivity_timeout;
 	guint transport_watch;
 	guint send_watch;
 
@@ -160,6 +161,7 @@ struct _GWeb {
 	char *http_version;
 	bool close_connection;
 	guint connect_timeout_ms;
+	guint inactivity_timeout_ms;
 
 	GWebDebugFunc debug_func;
 	gpointer debug_data;
@@ -415,6 +417,112 @@ static void cancel_connect_timeout(struct web_session *session)
 
 /**
  *  @brief
+ *    Handle a receive inactivity timeout.
+ *
+ *  This callback handles a receive inactivity timeout for a GWeb
+ *  session: the peer, having sent some of its response, sent nothing
+ *  more for the inactivity timeout period. The session transport is
+ *  closed and the GWeb transaction is terminated with a
+ *  G_IO_ERROR_TIMED_OUT error.
+ *
+ *  param[in,out]  user_data  A pointer to the mutable GWeb session
+ *                            for which the receive inactivity timeout
+ *                            expired.
+ *
+ *  @returns
+ *    G_SOURCE_REMOVE (that is, FALSE) unconditionally, indicating
+ *    that the timeout source that triggered this callback should be
+ *    removed on callback completion.
+ *
+ *  @sa add_inactivity_timeout
+ *  @sa cancel_inactivity_timeout
+ *
+ */
+static gboolean inactivity_timeout_cb(gpointer user_data)
+{
+	struct web_session *session = user_data;
+	g_autofree char *message = NULL;
+	g_autoptr(GError) local_error = NULL;
+
+	message = g_strdup_printf("no data from %s for %ums",
+		session->address, g_web_get_inactivity_timeout(session->web));
+
+	debug(session->web, "session %p %s",
+			session, message);
+
+	session->inactivity_timeout = 0;
+
+	close_session_transport(session);
+
+	session->result.buffer = NULL;
+	session->result.length = 0;
+
+	local_error = g_error_new_literal(G_IO_ERROR,
+					G_IO_ERROR_TIMED_OUT,
+					message);
+
+	call_result_func_failure(session, local_error);
+
+	return G_SOURCE_REMOVE;
+}
+
+/**
+ *  @brief
+ *    Add a receive inactivity timeout.
+ *
+ *  This attempts to add a receive inactivity timeout and callback to
+ *  the specified GWeb session. The timeout is successfully added if
+ *  @a session is non-null and @a timeout_ms is greater than zero.
+ *
+ *  @param[in,out]  session     A pointer to the mutable GWeb session
+ *                              to add the receive inactivity timeout
+ *                              to.
+ *  @param[in]      timeout_ms  The time, in milliseconds, for the
+ *                              receive inactivity timeout. If zero
+ *                              ('0'), no timeout is added.
+ *
+ *  @sa cancel_inactivity_timeout
+ *  @sa inactivity_timeout_cb
+ *
+ */
+static void add_inactivity_timeout(struct web_session *session,
+						guint timeout_ms)
+{
+	if (!session || !timeout_ms)
+		return;
+
+	session->inactivity_timeout = g_timeout_add(timeout_ms,
+				inactivity_timeout_cb, session);
+}
+
+/**
+ *  @brief
+ *    Cancel a receive inactivity timeout.
+ *
+ *  This attempts to cancel a receive inactivity timeout, if any, for
+ *  the specified GWeb session.
+ *
+ *  @param[in,out]  session  A pointer to the mutable GWeb session
+ *                           for which to cancel the receive
+ *                           inactivity timeout.
+ *
+ *  @sa add_inactivity_timeout
+ *  @sa inactivity_timeout_cb
+ *
+ */
+static void cancel_inactivity_timeout(struct web_session *session)
+{
+	if (!session)
+		return;
+
+	if (session->inactivity_timeout > 0) {
+		g_source_remove(session->inactivity_timeout);
+		session->inactivity_timeout = 0;
+	}
+}
+
+/**
+ *  @brief
  *    Close the TCP transport a GWeb sesssion.
  *
  *  This closes the TCP transport associated with the specified GWeb
@@ -471,6 +579,8 @@ static void free_session(struct web_session *session)
 		g_resolv_cancel_lookup(web->resolv, session->resolv_action);
 
 	cancel_connect_timeout(session);
+
+	cancel_inactivity_timeout(session);
 
 	close_session_transport(session);
 
@@ -815,6 +925,78 @@ guint g_web_get_connect_timeout(const GWeb *web)
 		goto done;
 
 	timeout_ms = web->connect_timeout_ms;
+
+done:
+	return timeout_ms;
+}
+
+/**
+ *  @brief
+ *    Set the receive inactivity timeout.
+ *
+ *  This sets the receive inactivity timeout, in milliseconds, for the
+ *  specified GWeb object.
+ *
+ *  The connect timeout (see #g_web_set_connect_timeout) runs until
+ *  the first data is received from the peer. The receive inactivity
+ *  timeout takes over from there: it is restarted each time data is
+ *  received and, if it expires, the request fails with
+ *  G_IO_ERROR_TIMED_OUT. Without it, a peer that sends part of its
+ *  response and then nothing more, without closing the connection,
+ *  leaves the request waiting indefinitely.
+ *
+ *  The timeout bounds the time between successive receipts of data,
+ *  not the total time of the request: a slow peer that continues to
+ *  make progress is not failed.
+ *
+ *  param[in,out]  web         A pointer to the mutable GWeb object
+ *                             for which the receive inactivity
+ *                             timeout is to be set.
+ *  param[in]      timeout_ms  The time, in milliseconds, for the
+ *                             receive inactivity timeout. A value of
+ *                             zero ('0') indicates that no receive
+ *                             inactivity timeout will be used.
+ *
+ *  @sa g_web_get_inactivity_timeout
+ *  @sa g_web_set_connect_timeout
+ *
+ */
+void g_web_set_inactivity_timeout(GWeb *web, guint timeout_ms)
+{
+	if (!web)
+		return;
+
+	debug(web, "timeout %ums", timeout_ms);
+
+	web->inactivity_timeout_ms = timeout_ms;
+}
+
+/**
+ *  @brief
+ *    Get the receive inactivity timeout.
+ *
+ *  This returns the receive inactivity timeout, in milliseconds, for
+ *  the specified GWeb object.
+ *
+ *  param[in]  web             A pointer to the immutable GWeb object
+ *                             for which the receive inactivity
+ *                             timeout is to be returned.
+ *
+ *  @returns
+ *    The receive inactivity timeout, in milliseconds. A value of zero
+ *    ('0') indicates that no receive inactivity timeout has been set.
+ *
+ *  @sa g_web_set_inactivity_timeout
+ *
+ */
+guint g_web_get_inactivity_timeout(const GWeb *web)
+{
+	guint timeout_ms = 0;
+
+	if (!web)
+		goto done;
+
+	timeout_ms = web->inactivity_timeout_ms;
 
 done:
 	return timeout_ms;
@@ -1461,12 +1643,19 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 	const gsize bytes_available = session->receive_space - 1;
 	gsize bytes_read;
 	GIOStatus status;
+	bool more;
 	g_autoptr(GError) local_error = NULL;
 	g_autoptr(GError) error = NULL;
 
-	/* We received some data or condition, cancel the connect timeout. */
+	/*
+	 * We received some data or condition, cancel the connect timeout
+	 * and any receive inactivity timeout. The latter is restarted
+	 * below if more data is expected.
+	 */
 
 	cancel_connect_timeout(session);
+
+	cancel_inactivity_timeout(session);
 
 	/* If there was a low-level I/O condition or error, there is
 	 * nothing more to do; simply fail the request.
@@ -1507,10 +1696,16 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 	}
 
 	/* Otherwise, continue the session request and process the
-	 * received data.
+	 * received data and, if more is expected, (re)start the receive
+	 * inactivity timeout.
 	 */
 
-	return received_data_continue(session, bytes_read);
+	more = received_data_continue(session, bytes_read);
+	if (more)
+		add_inactivity_timeout(session,
+			g_web_get_inactivity_timeout(session->web));
+
+	return more;
 }
 
 static int bind_to_address(int sk, const char *interface, int family)
