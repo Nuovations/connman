@@ -1111,6 +1111,7 @@ static void wispr_portal_web_result_success(GWebResult *result,
 
 		DBG("Redirect URL: %s", redirect);
 
+		g_free(wp_context->redirect_url);
 		wp_context->redirect_url = g_strdup(redirect);
 
 		wispr_portal_context_ref(wp_context);
