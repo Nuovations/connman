@@ -1587,12 +1587,15 @@ static inline int bind_socket(int sk, int index, int family)
  *                                      network stack.
  *
  *  @retval  0        If successful.
- *  @retval  -EIO     If a socket could not be created for the specified
- *                    session address family, the socket could not be
- *                    bound to the specified session network
- *                    interface, or the socket could not connect to
- *                    the specified session peer address.
  *  @retval  -ENOMEM  If a GLib transport channel could not be created.
+ *  @retval  -errno   The negated POSIX error from socket(), from
+ *                    binding the socket to the specified session
+ *                    network interface, or from connect(), if a
+ *                    socket could not be created for the specified
+ *                    session address family, could not be bound to
+ *                    the specified session network interface, or
+ *                    could not start connecting to the specified
+ *                    session peer address, respectively.
  *
  *  @sa close_session_transport
  *
@@ -1602,18 +1605,23 @@ static int connect_session_transport(struct web_session *session,
 {
 	GIOFlags flags;
 	int sk;
+	int err;
 
 	sk = socket(session->addr->ai_family, SOCK_STREAM | SOCK_CLOEXEC,
 			IPPROTO_TCP);
-	if (sk < 0)
-		return -EIO;
+	if (sk < 0) {
+		err = -errno;
+		debug(session->web, "socket() %s", strerror(-err));
+		return err;
+	}
 
 	if (session->web->index > 0) {
 		if (bind_socket(sk, session->web->index,
 					session->addr->ai_family) < 0) {
-			debug(session->web, "bind() %s", strerror(errno));
+			err = -errno;
+			debug(session->web, "bind() %s", strerror(-err));
 			close(sk);
-			return -EIO;
+			return err;
 		}
 	}
 
@@ -1643,8 +1651,9 @@ static int connect_session_transport(struct web_session *session,
 	if (connect(sk, session->addr->ai_addr,
 			session->addr->ai_addrlen) < 0) {
 		if (errno != EINPROGRESS) {
-			debug(session->web, "connect() %s", strerror(errno));
-			return -EIO;
+			err = -errno;
+			debug(session->web, "connect() %s", strerror(-err));
+			return err;
 		}
 	}
 
@@ -2530,11 +2539,15 @@ static void handle_resolved_address(struct web_session *session)
 
 	call_route_func(session);
 
+	/*
+	 * create_transport returns a negated POSIX error; both
+	 * g_io_error_from_errno and g_strerror require a positive one.
+	 */
 	ret = create_transport(session);
 	if (ret < 0) {
 		local_error = g_error_new_literal(G_IO_ERROR,
-						g_io_error_from_errno(ret),
-						g_strerror(ret));
+						g_io_error_from_errno(-ret),
+						g_strerror(-ret));
 
 		call_result_func_failure(session, local_error);
 	}
