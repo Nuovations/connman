@@ -1065,6 +1065,7 @@ static void wispr_portal_web_result_success(GWebResult *result,
 	guint16 status;
 	const char *str = NULL;
 	const char *redirect = NULL;
+	g_autofree char *message = NULL;
 
 	status = g_web_result_get_status(result);
 
@@ -1078,8 +1079,30 @@ static void wispr_portal_web_result_success(GWebResult *result,
 				wp_context->status_url, wp_context);
 		break;
 	case GWEB_HTTP_STATUS_CODE_OK:
-		if (wp_context->wispr_msg.message_type >= 0)
+		/*
+		 * A WISPr message type of zero or greater means the
+		 * response body carried a WISPr XML message. The type
+		 * starts at -1 (connman_wispr_message_init), is set only
+		 * when the body is parsed, and is reset to -1 after each
+		 * result, so here it describes this response alone.
+		 *
+		 * wispr_portal_web_result hands such a message to
+		 * wispr_manage_message first and skips this handler if
+		 * that acted on it: by requesting login credentials from
+		 * the agent (type 100), or by re-checking after a
+		 * successful login (type 120 or 140 with response code
+		 * 50). Reaching here with a type of zero or greater
+		 * therefore means it did not act: the type is one it does
+		 * not handle, the login request could not be made (for
+		 * example, with no agent registered), or the login was
+		 * rejected. Nothing else will complete this check, so
+		 * complete it as a failure.
+		 */
+		if (wp_context->wispr_msg.message_type >= 0) {
+			portal_manage_failure_status(wp_context, 0,
+				"unhandled WISPr message");
 			break;
+		}
 
 		if (g_web_result_get_header(result, "x-connman-status",
 						&str)) {
@@ -1119,6 +1142,18 @@ static void wispr_portal_web_result_success(GWebResult *result,
 				redirect, wispr_portal_web_result,
 				wispr_route_request, wp_context, NULL);
 
+		/*
+		 * If the redirect request could not even be started, there
+		 * will be no result callback to complete this check, so
+		 * complete it here as a failure.
+		 */
+		if (wp_context->request_id == 0) {
+			portal_manage_failure_status(wp_context, 0,
+				"could not follow redirect");
+			wispr_portal_context_unref(wp_context);
+			break;
+		}
+
 		return;
 	case GWEB_HTTP_STATUS_CODE_BAD_REQUEST:
 		portal_manage_failure_status(wp_context, 0, "bad request");
@@ -1139,6 +1174,17 @@ static void wispr_portal_web_result_success(GWebResult *result,
 				wp_context->status_url, wp_context);
 		break;
 	default:
+		/*
+		 * Any other status (for example, 204, 403, 5xx, or 511 from
+		 * a router or a block page answering on behalf of the
+		 * online check endpoint) cannot indicate success. Complete
+		 * the check as a failure; otherwise, it would never
+		 * complete and, in continuous mode, no further check would
+		 * be scheduled.
+		 */
+		message = g_strdup_printf("unexpected HTTP status %03u",
+					status);
+		portal_manage_failure_status(wp_context, 0, message);
 		break;
 	}
 
