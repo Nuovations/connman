@@ -1557,6 +1557,15 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context,
 
 	g_web_set_connect_timeout(wp_context->web, connect_timeout_ms);
 
+	/*
+	 * Use the same timeout to bound each gap between receipts of
+	 * response data once the connect timeout has ended with the
+	 * first of them. Otherwise, an endpoint, or a router answering in
+	 * its place, that sends part of a response and then nothing more
+	 * leaves this check incomplete indefinitely.
+	 */
+	g_web_set_inactivity_timeout(wp_context->web, connect_timeout_ms);
+
 	if (wp_context->type == CONNMAN_IPCONFIG_TYPE_IPV4) {
 		g_web_set_address_family(wp_context->web, AF_INET);
 		wp_context->status_url = online_check_ipv4_url;
