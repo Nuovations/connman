@@ -131,6 +131,7 @@ struct connman_wispr_portal_context {
 struct connman_wispr_portal {
 	struct connman_wispr_portal_context *ipv4_context;
 	struct connman_wispr_portal_context *ipv6_context;
+	bool browser_requested;
 };
 
 static bool wispr_portal_web_result(const GError *error, GWebResult *result, gpointer user_data);
@@ -724,6 +725,13 @@ static void portal_manage_success_status(GWebResult *result,
 				&str))
 		connman_info("Client-Timezone: %s", str);
 
+	/*
+	 * The network is reachable, so allow a browser request again
+	 * should a later check on this interface find a portal.
+	 */
+	if (wp_context->wispr_portal)
+		wp_context->wispr_portal->browser_requested = false;
+
 	wp_context->cb(service, type, true, 0, NULL);
 }
 
@@ -897,6 +905,77 @@ static void wispr_portal_browser_reply_cb(struct connman_service *service,
 	wispr_portal_context_unref(wp_context);
 }
 
+/**
+ *  @brief
+ *    Complete an "online" HTTP-based Internet reachability check as a
+ *    failure and request that the agent open a browser.
+ *
+ *  This handles a reachability check response that suggests a
+ *  captive portal requiring user interaction, such as a 200 "OK"
+ *  status without the "X-ConnMan-Status" header or a redirect that
+ *  cannot be followed.
+ *
+ *  If no browser has yet been requested for the network interface
+ *  associated with @a wp_context since its last successful check,
+ *  the agent, if any, is asked to open one at @a url. Regardless,
+ *  the check is then completed as a failure with @a message, so that
+ *  it is logged and counted and, in continuous mode, the next check
+ *  is scheduled whether or not, or whenever, the agent answers.
+ *
+ *  Requesting the browser at most once per interface until a check
+ *  succeeds preserves the behavior from before checks continued
+ *  past a portal: one request per portal encounter, not one per
+ *  rescheduled check.
+ *
+ *  @param[in,out]  wp_context  A pointer to the mutable WISPr portal
+ *                              detection context associated with the
+ *                              "online" HTTP-based Internet
+ *                              reachability check this is
+ *                              completing.
+ *  @param[in]      url         An optional pointer to an immutable
+ *                              null-terminated C string of the URL
+ *                              for the agent to open.
+ *  @param[in]      message     A pointer to an immutable
+ *                              null-terminated C string describing
+ *                              why the check failed.
+ *
+ *  @sa portal_manage_failure_status
+ *  @sa wispr_portal_browser_reply_cb
+ *  @sa wispr_portal_web_result_success
+ *
+ *  @private
+ *
+ */
+static void wispr_portal_request_browser(
+			struct connman_wispr_portal_context *wp_context,
+			const char *url,
+			const char *message)
+{
+	struct connman_wispr_portal *wispr_portal = wp_context->wispr_portal;
+	int err;
+
+	if (wispr_portal && !wispr_portal->browser_requested) {
+		/*
+		 * Retain a reference to the WISPr/portal context for the
+		 * browser request. It is released by the reply callback
+		 * or, if the request could not be made, here.
+		 */
+		wispr_portal_context_ref(wp_context);
+
+		err = __connman_agent_request_browser(wp_context->service,
+				wispr_portal_browser_reply_cb,
+				url, wp_context);
+		if (err == -EINPROGRESS)
+			wispr_portal->browser_requested = true;
+		else {
+			DBG("browser request failed: %d", err);
+			wispr_portal_context_unref(wp_context);
+		}
+	}
+
+	portal_manage_failure_status(wp_context, 0, message);
+}
+
 static void wispr_portal_request_wispr_login(struct connman_service *service,
 				bool success,
 				const char *ssid, int ssid_len,
@@ -1065,6 +1144,7 @@ static void wispr_portal_web_result_success(GWebResult *result,
 	guint16 status;
 	const char *str = NULL;
 	const char *redirect = NULL;
+	g_autofree char *message = NULL;
 
 	status = g_web_result_get_status(result);
 
@@ -1072,23 +1152,43 @@ static void wispr_portal_web_result_success(GWebResult *result,
 
 	switch (status) {
 	case GWEB_HTTP_STATUS_CODE_UNKNOWN:
-		wispr_portal_context_ref(wp_context);
-		__connman_agent_request_browser(wp_context->service,
-				wispr_portal_browser_reply_cb,
-				wp_context->status_url, wp_context);
+		wispr_portal_request_browser(wp_context,
+				wp_context->status_url,
+				"no HTTP status");
 		break;
 	case GWEB_HTTP_STATUS_CODE_OK:
-		if (wp_context->wispr_msg.message_type >= 0)
+		/*
+		 * A WISPr message type of zero or greater means the
+		 * response body carried a WISPr XML message. The type
+		 * starts at -1 (connman_wispr_message_init), is set only
+		 * when the body is parsed, and is reset to -1 after each
+		 * result, so here it describes this response alone.
+		 *
+		 * wispr_portal_web_result hands such a message to
+		 * wispr_manage_message first and skips this handler if
+		 * that acted on it: by requesting login credentials from
+		 * the agent (type 100), or by re-checking after a
+		 * successful login (type 120 or 140 with response code
+		 * 50). Reaching here with a type of zero or greater
+		 * therefore means it did not act: the type is one it does
+		 * not handle, the login request could not be made (for
+		 * example, with no agent registered), or the login was
+		 * rejected. Nothing else will complete this check, so
+		 * complete it as a failure.
+		 */
+		if (wp_context->wispr_msg.message_type >= 0) {
+			portal_manage_failure_status(wp_context, 0,
+				"unhandled WISPr message");
 			break;
+		}
 
 		if (g_web_result_get_header(result, "x-connman-status",
 						&str)) {
 			portal_manage_success_status(result, wp_context);
 		} else {
-			wispr_portal_context_ref(wp_context);
-			__connman_agent_request_browser(wp_context->service,
-					wispr_portal_browser_reply_cb,
-					wp_context->redirect_url, wp_context);
+			wispr_portal_request_browser(wp_context,
+					wp_context->redirect_url,
+					"missing X-ConnMan-Status header");
 		}
 
 		break;
@@ -1101,11 +1201,15 @@ static void wispr_portal_web_result_success(GWebResult *result,
 		if (!g_web_supports_tls() ||
 			!g_web_result_get_header(result, "location",
 							&redirect)) {
+			message = g_strdup_printf("HTTP status %03u redirect "
+					"not followed (%s)", status,
+					!g_web_supports_tls() ?
+						"no TLS support" :
+						"no Location header");
 
-			wispr_portal_context_ref(wp_context);
-			__connman_agent_request_browser(wp_context->service,
-					wispr_portal_browser_reply_cb,
-					wp_context->status_url, wp_context);
+			wispr_portal_request_browser(wp_context,
+					wp_context->status_url,
+					message);
 			break;
 		}
 
@@ -1118,6 +1222,18 @@ static void wispr_portal_web_result_success(GWebResult *result,
 		wp_context->request_id = g_web_request_get(wp_context->web,
 				redirect, wispr_portal_web_result,
 				wispr_route_request, wp_context, NULL);
+
+		/*
+		 * If the redirect request could not even be started, there
+		 * will be no result callback to complete this check, so
+		 * complete it here as a failure.
+		 */
+		if (wp_context->request_id == 0) {
+			portal_manage_failure_status(wp_context, 0,
+				"could not follow redirect");
+			wispr_portal_context_unref(wp_context);
+			break;
+		}
 
 		return;
 	case GWEB_HTTP_STATUS_CODE_BAD_REQUEST:
@@ -1133,12 +1249,22 @@ static void wispr_portal_web_result_success(GWebResult *result,
 		break;
 
 	case GWEB_HTTP_STATUS_CODE_HTTP_VERSION_NOT_SUPPORTED:
-		wispr_portal_context_ref(wp_context);
-		__connman_agent_request_browser(wp_context->service,
-				wispr_portal_browser_reply_cb,
-				wp_context->status_url, wp_context);
+		wispr_portal_request_browser(wp_context,
+				wp_context->status_url,
+				"HTTP version not supported");
 		break;
 	default:
+		/*
+		 * Any other status (for example, 204, 403, 5xx, or 511 from
+		 * a router or a block page answering on behalf of the
+		 * online check endpoint) cannot indicate success. Complete
+		 * the check as a failure; otherwise, it would never
+		 * complete and, in continuous mode, no further check would
+		 * be scheduled.
+		 */
+		message = g_strdup_printf("unexpected HTTP status %03u",
+					status);
+		portal_manage_failure_status(wp_context, 0, message);
 		break;
 	}
 
@@ -1430,6 +1556,15 @@ static int wispr_portal_detect(struct connman_wispr_portal_context *wp_context,
 		g_web_set_debug(wp_context->web, web_debug, "WEB");
 
 	g_web_set_connect_timeout(wp_context->web, connect_timeout_ms);
+
+	/*
+	 * Use the same timeout to bound each gap between receipts of
+	 * response data once the connect timeout has ended with the
+	 * first of them. Otherwise, an endpoint, or a router answering in
+	 * its place, that sends part of a response and then nothing more
+	 * leaves this check incomplete indefinitely.
+	 */
+	g_web_set_inactivity_timeout(wp_context->web, connect_timeout_ms);
 
 	if (wp_context->type == CONNMAN_IPCONFIG_TYPE_IPV4) {
 		g_web_set_address_family(wp_context->web, AF_INET);

@@ -224,11 +224,17 @@ http://ipv6.connman.net/online/status.html respectively.
 .BI OnlineCheckConnectTimeout= secs[.milliseconds]
 The time, in decimal seconds (for example, 12.3), to wait for a
 successful TCP connection to the host associated with
-\fBOnlineCheckIPv4URL\fR or \fBOnlineCheckIPv6URL\fR (see above). Connections
-that take longer than \fBOnlineCheckConnectTimeout\fR will be aborted. The
-default value is zero ('0') which indicates that no explicit
-connection timeout will be used, leaving the timeout to the underlying
-operating system and network stack.
+\fBOnlineCheckIPv4URL\fR or \fBOnlineCheckIPv6URL\fR (see above) and
+for the first data of its response, and thereafter for each further
+piece of the response. A check that waits longer than
+\fBOnlineCheckConnectTimeout\fR for any of these is aborted and counted
+as a failed check. Because the timeout bounds each wait rather than
+the whole check, a slow endpoint that continues to send its response
+is not failed. The default value is zero ('0') which indicates that
+no explicit timeout will be used, leaving the timeout to the
+underlying operating system and network stack; with zero, an endpoint
+that stops sending part way through its response, without closing
+the connection, leaves the check incomplete indefinitely.
 .TP
 .BI OnlineCheckInitialInterval= interval, OnlineCheckMaxInterval= interval
 Range of intervals between two online check requests.
