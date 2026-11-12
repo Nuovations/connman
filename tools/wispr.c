@@ -524,7 +524,7 @@ static bool wispr_result(const GError *error, GWebResult *result, gpointer user_
 		if (status != 302)
 			goto done;
 
-		if (!g_web_result_get_header(result, "Location", &redirect))
+		if (!g_web_result_get_header(result, "location", &redirect))
 			goto done;
 
 		printf("Redirect URL: %s\n", redirect);
@@ -583,7 +583,7 @@ static bool wispr_result(const GError *error, GWebResult *result, gpointer user_
 	if (status == 302) {
 		const char *redirect;
 
-		if (!g_web_result_get_header(result, "Location", &redirect))
+		if (!g_web_result_get_header(result, "location", &redirect))
 			goto done;
 
 		printf("\n");
