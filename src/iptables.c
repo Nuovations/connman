@@ -2663,8 +2663,8 @@ static struct xtables_target *prepare_target(struct connman_iptables *table,
 							const char *target_name)
 {
 	struct xtables_target *xt_t = NULL;
-	bool is_builtin, is_user_defined;
-	GList *chain_head = NULL;
+	volatile bool is_builtin, is_user_defined;
+	GList *volatile chain_head = NULL;
 	size_t target_size;
 	int err;
 
@@ -3067,7 +3067,7 @@ static int parse_xt_modules(int c, bool invert,
 				struct parse_context *ctx)
 {
 	struct xtables_match *m;
-	struct xtables_rule_match *rm;
+	struct xtables_rule_match *volatile rm;
 	struct ipt_entry fw;
 	struct ip6t_entry fw6;
 	int err;
@@ -3167,7 +3167,7 @@ static int parse_xt_modules(int c, bool invert,
 
 static int final_check_xt_modules(struct parse_context *ctx)
 {
-	struct xtables_rule_match *rm;
+	struct xtables_rule_match *volatile rm;
 	int err;
 
 	for (rm = ctx->xt_rm; rm; rm = rm->next) {
