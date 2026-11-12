@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang_version: [ "14", "15", "16", "17", "18", "19, "20" ]
+        clang_version: [ "14", "15", "16", "17", "18", "19", "20" ]
         configuration:
           - { name: "Debug",   options: "--enable-debug --disable-optimization" }
           - { name: "Release", options: "--disable-debug" }
