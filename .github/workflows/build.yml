@@ -78,12 +78,12 @@ jobs:
           make -j dist
 
   gcc:
-    name: "GCC ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
+    name: "GCC-${{matrix.gcc_version}} ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
     runs-on: ubuntu-26.04
-
     strategy:
       fail-fast: false
       matrix:
+        gcc_version: [ "11", "12", "13", "14", "15", "16" ]
         configuration:
           - { name: "Debug",   options: "--enable-debug --disable-optimization" }
           - { name: "Release", options: "--disable-debug" }
@@ -91,13 +91,15 @@ jobs:
           - { name: "IP Tables", type: "iptables", packages: "libxtables-dev" }
           - { name: "NF Tables", type: "nftables", packages: "libnftables-dev libnftnl-dev" }
     env:
-      CC: gcc
+      CC: gcc-${{matrix.gcc_version}}
     steps:
 
       - name: "Install Job Package Dependencies"
         run: |
+          # Resolute (26.04) provides gcc-11 through gcc-16 from
+          # Canonical.
           sudo apt-get update
-          sudo apt-get --no-install-recommends install -y gcc
+          sudo apt-get --no-install-recommends install -y gcc-${{matrix.gcc_version}}
 
       - name: "Install connman Package Dependencies"
         run: |
