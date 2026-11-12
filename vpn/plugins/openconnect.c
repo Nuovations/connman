@@ -325,7 +325,7 @@ static int oc_notify(DBusMessage *msg, struct vpn_provider *provider)
 			netmask = g_strdup(value);
 
 		if (!strcmp(key, "INTERNAL_IP6_NETMASK")) {
-			char *sep;
+			const char *sep;
 
 			/* The netmask contains the address and the prefix */
 			sep = strchr(value, '/');
