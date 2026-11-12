@@ -32,11 +32,11 @@ jobs:
 
   clang:
     name: "clang/LLVM-${{matrix.clang_version}} ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
-        clang_version: [ "14", "15", "16", "17", "18", "19", "20" ]
+        clang_version: [ "17", "18", "19", "20", "21", "22" ]
         configuration:
           - { name: "Debug",   options: "--enable-debug --disable-optimization" }
           - { name: "Release", options: "--disable-debug" }
@@ -49,7 +49,7 @@ jobs:
 
       - name: "Install Job Package Dependencies"
         run: |
-          # Noble (24.04) provides clang-14 through clang-20 from
+          # Resolute (26.04) provides clang-17 through clang-22 from
           # Canonical.
           sudo apt-get update
           sudo apt-get --no-install-recommends install -y clang-${{matrix.clang_version}}
@@ -79,7 +79,7 @@ jobs:
 
   gcc:
     name: "GCC ${{matrix.configuration['name']}} w/ ${{matrix.firewall['name']}} Firewall"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
