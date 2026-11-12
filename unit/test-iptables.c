@@ -302,11 +302,6 @@ int socket(int domain, int type, int protocol)
 int getsockopt(int sockfd, int level, int optname, void *optval,
 			socklen_t *optlen)
 {
-	struct ipt_getinfo *info = NULL;
-	struct ipt_get_entries *entries = NULL;
-	struct ip6t_getinfo *info6 = NULL;
-	struct ip6t_get_entries *entries6 = NULL;
-
 	DBG("");
 
 	g_assert_cmpint(global_sockfd, ==, sockfd);
@@ -318,11 +313,9 @@ int getsockopt(int sockfd, int level, int optname, void *optval,
 		switch (optname) {
 		case IPT_SO_GET_ENTRIES:
 			DBG("IPT_SO_GET_ENTRIES");
-			optval = entries;
 			break;
 		case IPT_SO_GET_INFO:
 			DBG("IPT_SO_GET_INFO");
-			optval = info;
 			break;
 		default:
 			DBG("optname %d", optname);
@@ -335,11 +328,9 @@ int getsockopt(int sockfd, int level, int optname, void *optval,
 		switch (optname) {
 		case IP6T_SO_GET_ENTRIES:
 			DBG("IP6T_SO_GET_ENTRIES");
-			optval = entries6;
 			break;
 		case IP6T_SO_GET_INFO:
 			DBG("IP6T_SO_GET_INFO");
-			optval = info6;
 			break;
 		default:
 			DBG("optname %d", optname);
