@@ -151,7 +151,7 @@ static const char *hooknames[] = {
 
 struct connman_iptables_entry {
 	int type;
-	unsigned int offset;
+	int offset;
 	int builtin;
 	int counter_idx;
 
