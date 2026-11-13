@@ -1143,6 +1143,92 @@ static bool is_online(enum connman_service_state state)
 	return state == CONNMAN_SERVICE_STATE_ONLINE;
 }
 
+/**
+ *  @brief
+ *    Determine whether a network service has an IPv4 configuration
+ *    other than IPv4 link-local addressing.
+ *
+ *  This determines whether the specified network service is connected
+ *  for IPv4 with a configuration method other than "auto". For IPv4,
+ *  "auto" is IPv4 link-local (RFC 3927) addressing, to which DHCP
+ *  falls back when no lease is available. connman assigns that
+ *  address itself and indicates the IPv4 configuration "ready" with
+ *  it, so the method is what tells it apart.
+ *
+ *  @param[in]  service  A pointer to the immutable service to check.
+ *
+ *  @returns
+ *    True if @a service is connected for IPv4 with a configuration
+ *    method other than "auto"; otherwise, false.
+ *
+ */
+static bool has_non_link_local_ipv4(const struct connman_service *service)
+{
+	return is_connected(service->state_ipv4) &&
+		__connman_ipconfig_get_method(service->ipconfig_ipv4) !=
+					CONNMAN_IPCONFIG_METHOD_AUTO;
+}
+
+/**
+ *  @brief
+ *    Determine whether a network service has an IPv6 configuration
+ *    other than IPv6 link-local addressing.
+ *
+ *  This determines whether the specified network service is connected
+ *  for IPv6. Every IPv6 interface always has an IPv6 link-local
+ *  (fe80::/10) address, but connman never counts one: the routing
+ *  netlink new address handler drops IPv6 link-local addresses, so
+ *  they never reach the IP configuration, and the IPv6 configuration
+ *  becomes "ready" only with some other address (from router
+ *  advertisement, DHCPv6 or manual configuration). Being connected
+ *  for IPv6 therefore already implies a non-link-local address.
+ *
+ *  @param[in]  service  A pointer to the immutable service to check.
+ *
+ *  @returns
+ *    True if @a service is connected for IPv6; otherwise, false.
+ *
+ */
+static bool has_non_link_local_ipv6(const struct connman_service *service)
+{
+	return is_connected(service->state_ipv6);
+}
+
+/**
+ *  @brief
+ *    Determine whether a network service is connected only by
+ *    link-local addressing.
+ *
+ *  This determines whether the specified network service is connected,
+ *  yet has neither an IPv4 nor an IPv6 configuration other than
+ *  link-local addressing.
+ *
+ *  Such a service, for example Ethernet cabled directly to a phone or
+ *  laptop, or to a switch with no DHCP server or IPv6 router behind
+ *  it, reaches only the hosts on its own link. Its default route,
+ *  "default dev <interface> scope link", leads to no gateway.
+ *
+ *  @param[in]  service  A pointer to the immutable service to check.
+ *
+ *  @returns
+ *    True if @a service is connected for IPv4 or IPv6 but has no
+ *    configuration of either other than link-local addressing;
+ *    otherwise, false.
+ *
+ *  @sa has_non_link_local_ipv4
+ *  @sa has_non_link_local_ipv6
+ *
+ */
+static bool is_link_local_only(const struct connman_service *service)
+{
+	if (!is_connected(service->state_ipv4) &&
+			!is_connected(service->state_ipv6))
+		return false;
+
+	return !has_non_link_local_ipv4(service) &&
+		!has_non_link_local_ipv6(service);
+}
+
 static bool is_idle(enum connman_service_state state)
 {
 	switch (state) {
@@ -8285,6 +8371,45 @@ static gint service_compare_vpn(const struct connman_service *a,
 
 /**
  *  @brief
+ *    Compare two network services by whether each is connected only
+ *    by link-local addressing.
+ *
+ *  This compares the two specified network services by whether each
+ *  is connected only by link-local addressing, giving priority to the
+ *  service that can reach beyond its own link.
+ *
+ *  @param[in]  service_a  A pointer to the first immutable service
+ *                         to compare.
+ *  @param[in]  service_b  A pointer to the second immutable service
+ *                         to compare.
+ *
+ *  @retval   0  If both or neither of the services are connected only
+ *               by link-local addressing.
+ *  @retval  -1  If only @a service_b is connected only by link-local
+ *               addressing and @a service_a should sort @b before
+ *               @a service_b.
+ *  @retval   1  If only @a service_a is connected only by link-local
+ *               addressing and @a service_b should sort @b before
+ *               @a service_a.
+ *
+ *  @sa is_link_local_only
+ *
+ */
+static gint service_compare_link_local_only(
+					const struct connman_service *service_a,
+					const struct connman_service *service_b)
+{
+	const bool a_link_local_only = is_link_local_only(service_a);
+	const bool b_link_local_only = is_link_local_only(service_b);
+
+	if (a_link_local_only == b_link_local_only)
+		return 0;
+
+	return a_link_local_only ? 1 : -1;
+}
+
+/**
+ *  @brief
  *    Compare two network services against the @a
  *    PreferredTechnologies priority list.
  *
@@ -8352,6 +8477,7 @@ static gint service_compare_preferred(const struct connman_service *service_a,
  *  @retval  < 0  If service @a a should sort @b before service @a b.
  *  @retval  > 0  If service @a b should sort @b before service @a a.
  *
+ *  @sa service_compare_link_local_only
  *  @sa service_compare_preferred
  *  @sa __connman_service_compare
  *
@@ -8408,6 +8534,17 @@ static gint service_compare(gconstpointer a, gconstpointer b)
 
 		if (service_a->order < service_b->order)
 			return 1;
+
+		/*
+		 * If at this point the services are still comparing as
+		 * equivalent, then give priority to the service that can
+		 * reach beyond its own link over one connected only by
+		 * link-local addressing, ahead of the PreferredTechnologies
+		 * priority list.
+		 */
+		rval = service_compare_link_local_only(service_a, service_b);
+		if (rval)
+			return rval;
 
 		rval = service_compare_preferred(service_a, service_b);
 		if (rval)
