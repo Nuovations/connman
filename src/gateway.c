@@ -3978,8 +3978,10 @@ bool __connman_gateway_update(void)
 	DBG("updated4 %u updated6 %u", updated4, updated6);
 
 	/*
-	 * Set default gateway if it has been updated or if it has not been
-	 * set as active yet.
+	 * Set default gateway if it has been updated, if it has not been
+	 * set as active yet, or if it is active but only as a
+	 * low-priority default gateway, for example after the gateway of
+	 * the former default service was removed rather than demoted.
 	 */
 	if (default_gateway) {
 		const struct gateway_config *default_config;
@@ -3989,7 +3991,9 @@ bool __connman_gateway_update(void)
 
 		if (default_config &&
 			(updated4 ||
-			!is_gateway_config_state_active(default_config)))
+			!is_gateway_config_state_active(default_config) ||
+			is_gateway_config_type(default_config,
+				CONNMAN_GATEWAY_CONFIG_TYPE_LOW_PRIORITY_DEFAULT)))
 			PROMOTE_DEFAULT_GATEWAY(default_gateway, type);
 
 		type = CONNMAN_IPCONFIG_TYPE_IPV6;
@@ -3997,7 +4001,9 @@ bool __connman_gateway_update(void)
 
 		if (default_config &&
 			(updated6 ||
-			!is_gateway_config_state_active(default_config)))
+			!is_gateway_config_state_active(default_config) ||
+			is_gateway_config_type(default_config,
+				CONNMAN_GATEWAY_CONFIG_TYPE_LOW_PRIORITY_DEFAULT)))
 			PROMOTE_DEFAULT_GATEWAY(default_gateway, type);
 	}
 
