@@ -105,7 +105,12 @@ compared to another preferred type further down the list
 with state 'ready' or with a non-preferred type; a service
 of a preferred technology type in state 'online' will get
 the default route when compared to either a non-preferred
-type or a preferred type further down in the list.
+type or a preferred type further down in the list. A
+service connected only by link-local addressing (for
+example, Ethernet with no DHCP server or IPv6 router on
+its link) is not preferred over a connected service that
+can reach beyond its link, whatever its type; it gets the
+default route only when no such service is connected.
 .TP
 .BI NetworkInterfaceBlacklist= interface\fR[,...]
 List of blacklisted network interfaces separated by ",".
