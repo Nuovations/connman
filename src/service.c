@@ -9286,8 +9286,9 @@ static void downgrade_connected_services(void)
  *  This attempts to switch the order of the specified services in the
  *  network service list if and only if a) the services are non-null,
  *  b) do not have pointer equivalence, and c) if @a new_service
- *  should sort before @a default_service according to the @a
- *  PreferredTechnologies list.
+ *  should sort before @a default_service, first according to whether
+ *  either is connected only by link-local addressing and then
+ *  according to the @a PreferredTechnologies list.
  *
  *  @param[in,out]  default_service  A pointer to the mutable, default
  *                                   network service to potentially
@@ -9312,6 +9313,8 @@ static int service_update_preferred_order(struct connman_service *default_servic
 		struct connman_service *new_service,
 		enum connman_service_state new_state)
 {
+	gint rval;
+
 	DBG("default_service %p (%s) new_service %p (%s) new_state %d (%s)",
 		default_service, connman_service_get_identifier(default_service),
 		new_service, connman_service_get_identifier(new_service),
@@ -9320,7 +9323,17 @@ static int service_update_preferred_order(struct connman_service *default_servic
 	if (!default_service || default_service == new_service)
 		return 0;
 
-	if (service_compare_preferred(default_service, new_service) > 0) {
+	/*
+	 * A service connected only by link-local addressing never
+	 * displaces a default service that can reach beyond its own
+	 * link, and is always displaced by one, whatever the
+	 * PreferredTechnologies list says.
+	 */
+	rval = service_compare_link_local_only(default_service, new_service);
+	if (!rval)
+		rval = service_compare_preferred(default_service, new_service);
+
+	if (rval > 0) {
 		switch_service_order(default_service,
 				new_service);
 		__connman_gateway_update();
